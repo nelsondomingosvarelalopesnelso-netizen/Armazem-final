@@ -44,6 +44,8 @@ class HistoricoPreco(db.Model):
     produto_id = db.Column(db.Integer, db.ForeignKey("produto.id"))
     preco_antigo = db.Column(db.Float)
     preco_novo = db.Column(db.Float)
+    preco_compra_antigo = db.Column(db.Float)
+    preco_compra_novo = db.Column(db.Float)
     data = db.Column(db.DateTime, default=datetime.utcnow)
     produto = db.relationship("Produto")
 
@@ -64,6 +66,8 @@ class FechamentoDia(db.Model):
     total_bruto = db.Column(db.Float)
     total_lucro = db.Column(db.Float, default=0)
     qtd_vendas = db.Column(db.Integer)
+    meta_atingida = db.Column(db.Boolean, default=False)
+    meta_lucro_atingida = db.Column(db.Boolean, default=False)
     data_fechamento = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Caixa(db.Model):
@@ -77,6 +81,9 @@ class Compra(db.Model):
     descricao = db.Column(db.String(200))
     valor = db.Column(db.Float)
     data = db.Column(db.DateTime, default=datetime.utcnow)
+
+META_VENDA = 100000
+META_LUCRO = 30000
 
 T = """<!DOCTYPE html><html lang="pt"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Armazem</title><style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
@@ -117,6 +124,11 @@ td{padding:7px;border-bottom:1px solid #eee}
 .btn-orange{background:#e94560;color:#fff}
 .btn-red{background:#c62828;color:#fff}
 .btn-purple{background:#6a1b9a;color:#fff}
+.btn:hover{opacity:.9}
+.parabens{background:linear-gradient(135deg,#4caf50,#8bc34a);color:#fff;padding:20px;border-radius:10px;text-align:center;margin-bottom:12px;font-size:1.1rem}
+.parabens h3{margin-bottom:8px;font-size:1.3rem}
+.margem{color:#2e7d32;font-weight:600}
+.margem-baixa{color:#c62828;font-weight:600}
 </style></head><body id="body">{% if session.get('user_id') %}<div class="top"><h1>Armazem</h1><div class="user">Ola, {{ session.get('nome','') }}</div><div class="nav"><a href="/">Vender</a><a href="/dashboard">Dashboard</a>{% if session.get('tipo')=='admin' %}<a href="/hoje">Hoje</a><a href="/historico">Historico</a><a href="/relatorio">Relatorio</a><a href="/lucro">Lucro</a><a href="/caixa">Caixa</a><a href="/produtos">Produtos</a><a href="/stock">Stock</a><a href="/compras">Compras</a><a href="/categorias">Categorias</a><a href="/exportar">Exportar</a><a href="/utilizadores">Utilizadores</a><a href="/mensal">Mensal</a>{% else %}{% if session.get('perm_hoje') %}<a href="/hoje">Hoje</a>{% endif %}{% if session.get('perm_historico') %}<a href="/historico">Historico</a>{% endif %}{% if session.get('perm_relatorio') %}<a href="/relatorio">Relatorio</a>{% endif %}{% if session.get('perm_lucro') %}<a href="/lucro">Lucro</a>{% endif %}{% if session.get('perm_caixa') %}<a href="/caixa">Caixa</a>{% endif %}{% if session.get('perm_produtos') %}<a href="/produtos">Produtos</a>{% endif %}{% if session.get('perm_stock') %}<a href="/stock">Stock</a>{% endif %}{% endif %}<a href="/calculadora">Calculadora</a><a href="#" onclick="toggleDark();return false;">Modo</a><a href="/logout">Sair</a></div></div>{% endif %}<div class="c">{% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for cat, msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}{% endif %}{% endwith %}{{ content|safe }}</div><script>function toggleDark(){document.getElementById('body').classList.toggle('dark');localStorage.setItem('dark',document.getElementById('body').classList.contains('dark'))}if(localStorage.getItem('dark')==='true')document.getElementById('body').classList.add('dark')</script></body></html>"""
 
 def is_admin():
@@ -125,6 +137,11 @@ def is_admin():
 def tem_perm(perm):
     if is_admin(): return True
     return session.get(perm, False)
+
+def calcular_margem(preco, preco_compra):
+    if preco_compra and preco_compra > 0 and preco > 0:
+        return ((preco - preco_compra) / preco) * 100
+    return 0
 
 @app.route("/")
 def index():
@@ -140,9 +157,13 @@ def index():
     boxes = ""
     for p in q.order_by(Produto.nome).all():
         cls = "box destaque" if p.id in top_ids else "box"
+        margem = calcular_margem(p.preco, p.preco_compra or 0)
+        margem_cls = "margem" if margem >= 30 else "margem-baixa"
         boxes += '<div class="'+cls+'"><b>'+p.nome+'</b>'
         if p.categoria: boxes += '<div style="font-size:.7rem;color:#e94560">'+p.categoria.nome+'</div>'
-        boxes += '<div>Venda: Kz '+str(int(p.preco))+'</div><div>Compra: Kz '+str(int(p.preco_compra or 0))+'</div><div>Stock: '+str(p.quantidade)+'</div>'
+        boxes += '<div>Venda: Kz '+str(int(p.preco))+'</div><div>Compra: Kz '+str(int(p.preco_compra or 0))+'</div>'
+        boxes += '<div class="'+margem_cls+'">Margem: '+str(int(margem))+'%</div>'
+        boxes += '<div>Stock: '+str(p.quantidade)+'</div>'
         boxes += '<form method="POST" action="/vender"><input type="hidden" name="produto_id" value="'+str(p.id)+'"><button class="g s">Vender</button></form>'
         if is_admin():
             boxes += '<form method="POST" action="/devolver/'+str(p.id)+'"><button class="o s">Devolver</button></form>'
@@ -157,7 +178,7 @@ def index():
     if is_admin():
         baixos = Produto.query.filter(Produto.quantidade <= Produto.stock_minimo).all()
         if baixos:
-            alertas = '<div class="alerta">Stock baixo: '+", ".join(p.nome for p in baixos)+'</div>'
+            alertas = '<div class="alerta">Stock baixo: '+", ".join(p.nome+" ("+str(p.quantidade)+")" for p in baixos)+'</div>'
     return render_template_string(T, content=alertas+'<div class="card"><h2>Vender</h2><form method="GET"><input name="busca" placeholder="Pesquisar..." value="'+busca+'">'+sel+'<button>Pesquisar</button></form><div class="grid">'+boxes+'</div></div>')
 
 @app.route("/vender", methods=["POST"])
@@ -197,7 +218,12 @@ def hoje():
     bruto = sum(v.valor_total for v in vendas)
     lucro = sum(v.lucro or 0 for v in vendas)
     linhas = "".join("<tr><td>"+v.produto.nome+"</td><td>"+str(v.quantidade)+"</td><td>Kz "+str(int(v.valor_total))+"</td><td>Kz "+str(int(v.lucro or 0))+"</td></tr>" for v in vendas)
-    return render_template_string(T, content='<div class="card"><h2>Hoje</h2><p>Total: <b>Kz '+str(int(bruto))+'</b></p><p>Lucro: <b>Kz '+str(int(lucro))+'</b></p><form method="POST" action="/finalizar"><button class="o">Finalizar</button></form><table><tr><th>Produto</th><th>Qtd</th><th>Valor</th><th>Lucro</th></tr>'+linhas+'</table></div>')
+    meta_msg = ""
+    if bruto >= META_VENDA:
+        meta_msg += '<div class="parabens"><h3>Parabens!</h3><p>Atingiste a meta de vendas (100.000 Kz)!</p></div>'
+    if lucro >= META_LUCRO:
+        meta_msg += '<div class="parabens"><h3>Parabens!</h3><p>Atingiste a meta de lucro (30.000 Kz)!</p></div>'
+    return render_template_string(T, content=meta_msg+'<div class="card"><h2>Hoje</h2><p>Total: <b>Kz '+str(int(bruto))+'</b></p><p>Lucro: <b>Kz '+str(int(lucro))+'</b></p><form method="POST" action="/finalizar"><button class="o">Finalizar</button></form><table><tr><th>Produto</th><th>Qtd</th><th>Valor</th><th>Lucro</th></tr>'+linhas+'</table></div>')
 
 @app.route("/finalizar", methods=["POST"])
 def finalizar():
@@ -206,9 +232,14 @@ def finalizar():
     vendas = Venda.query.filter(db.func.date(Venda.data)==date.today()).all()
     bruto = sum(v.valor_total for v in vendas)
     lucro = sum(v.lucro or 0 for v in vendas)
-    db.session.add(FechamentoDia(user_id=uid, data=date.today(), total_bruto=bruto, total_lucro=lucro, qtd_vendas=len(vendas)))
+    meta_atingida = bruto >= META_VENDA
+    meta_lucro = lucro >= META_LUCRO
+    db.session.add(FechamentoDia(user_id=uid, data=date.today(), total_bruto=bruto, total_lucro=lucro, qtd_vendas=len(vendas), meta_atingida=meta_atingida, meta_lucro_atingida=meta_lucro))
     db.session.commit()
-    flash("Finalizado e guardado no relatorio")
+    if meta_atingida:
+        flash("Parabens! Atingiste a meta de vendas!")
+    if meta_lucro:
+        flash("Parabens! Atingiste a meta de lucro!")
     return redirect("/hoje")
 
 @app.route("/lucro")
@@ -226,7 +257,8 @@ def lucro():
         por_produto[v.produto.nome]["venda"] += v.valor_total
         por_produto[v.produto.nome]["lucro"] += v.lucro or 0
     linhas = "".join("<tr><td>"+n+"</td><td>"+str(d["qtd"])+"</td><td>Kz "+str(int(d["venda"]))+"</td><td>Kz "+str(int(d["lucro"]))+"</td></tr>" for n,d in por_produto.items())
-    return render_template_string(T, content='<div class="card"><h2>Lucro de Hoje</h2><p>Total vendas: <b>Kz '+str(int(total_venda))+'</b></p><p>Lucro: <b>Kz '+str(int(total_lucro))+'</b></p><table><tr><th>Produto</th><th>Qtd</th><th>Venda</th><th>Lucro</th></tr>'+linhas+'</table></div>')
+    meta_status = "Atingida" if total_lucro >= META_LUCRO else "Em progresso"
+    return render_template_string(T, content='<div class="card"><h2>Lucro de Hoje</h2><p>Total vendas: <b>Kz '+str(int(total_venda))+'</b></p><p>Lucro: <b>Kz '+str(int(total_lucro))+'</b></p><p>Meta lucro: Kz '+str(META_LUCRO)+' ('+meta_status+')</p><table><tr><th>Produto</th><th>Qtd</th><th>Venda</th><th>Lucro</th></tr>'+linhas+'</table></div>')
 
 @app.route("/historico")
 def historico():
@@ -255,8 +287,8 @@ def calculadora():
 def relatorio():
     if not tem_perm("perm_relatorio"): return redirect("/")
     fs = FechamentoDia.query.order_by(FechamentoDia.data_fechamento.desc()).all()
-    linhas = "".join("<tr><td>"+f.data.strftime("%d/%m/%Y")+"</td><td>Kz "+str(int(f.total_bruto))+"</td><td>Kz "+str(int(f.total_lucro or 0))+"</td><td>"+str(f.qtd_vendas)+"</td></tr>" for f in fs)
-    return render_template_string(T, content='<div class="card"><h2>Relatorio</h2><table><tr><th>Data</th><th>Total</th><th>Lucro</th><th>Vendas</th></tr>'+linhas+'</table></div>')
+    linhas = "".join("<tr><td>"+f.data.strftime("%d/%m/%Y")+"</td><td>Kz "+str(int(f.total_bruto))+"</td><td>Kz "+str(int(f.total_lucro or 0))+"</td><td>"+str(f.qtd_vendas)+"</td><td>"+("Sim" if f.meta_atingida else "Nao")+"</td><td>"+("Sim" if f.meta_lucro_atingida else "Nao")+"</td></tr>" for f in fs)
+    return render_template_string(T, content='<div class="card"><h2>Relatorio</h2><table><tr><th>Data</th><th>Total</th><th>Lucro</th><th>Vendas</th><th>Meta Venda</th><th>Meta Lucro</th></tr>'+linhas+'</table></div>')
 
 @app.route("/mensal")
 def mensal():
@@ -273,7 +305,20 @@ def mensal():
         dias.append((d.strftime("%d"), int(f.total_bruto) if f else 0))
     max_v = max([d[1] for d in dias] or [1]) or 1
     barras = "".join('<div style="display:inline-block;width:28px;text-align:center;margin:0 2px"><div style="background:#e94560;height:'+str(max(5,int(80*d[1]/max_v)))+'px;border-radius:3px"></div><div style="font-size:.65rem">'+d[0]+'</div></div>' for d in dias)
-    return render_template_string(T, content='<div class="card"><h2>Relatorio Mensal</h2><p>Total: <b>Kz '+str(int(total_mes))+'</b></p><p>Lucro: <b>Kz '+str(int(total_lucro))+'</b></p><div style="overflow-x:auto;margin-top:12px"><div style="display:flex;align-items:flex-end;height:100px">'+barras+'</div></div></div>')
+    return render_template_string(T, content='<div class="card"><h2>Relatorio Mensal</h2><p>Total: <b>Kz '+str(int(total_mes))+'</b></p><p>Lucro: <b>Kz '+str(int(total_lucro))+'</b></p><p><a href="/exportar-mensal" class="btn btn-green">Exportar CSV do Mes</a></p><div style="overflow-x:auto;margin-top:12px"><div style="display:flex;align-items:flex-end;height:100px">'+barras+'</div></div></div>')
+
+@app.route("/exportar-mensal")
+def exportar_mensal():
+    if not is_admin(): return redirect("/")
+    hoje = date.today()
+    inicio = hoje.replace(day=1)
+    fs = FechamentoDia.query.filter(FechamentoDia.data >= inicio).order_by(FechamentoDia.data).all()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Data", "Total", "Lucro", "Vendas", "Meta Venda", "Meta Lucro"])
+    for f in fs:
+        writer.writerow([f.data.strftime("%d/%m/%Y"), f.total_bruto, f.total_lucro or 0, f.qtd_vendas, "Sim" if f.meta_atingida else "Nao", "Sim" if f.meta_lucro_atingida else "Nao"])
+    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment;filename=relatorio_mensal.csv"})
 
 @app.route("/caixa", methods=["GET","POST"])
 def caixa():
@@ -301,9 +346,13 @@ def produtos():
     ps = Produto.query.order_by(Produto.nome).all()
     cats = Categoria.query.all()
     cat_opts = "".join('<option value="'+str(c.id)+'">'+c.nome+'</option>' for c in cats)
-    linhas = "".join("<tr><td>"+p.nome+"</td><td>"+(p.categoria.nome if p.categoria else "-")+"</td><td>Kz "+str(int(p.preco))+"</td><td>Kz "+str(int(p.preco_compra or 0))+"</td><td>"+str(p.quantidade)+"</td>"+("<td><a href='/editar/"+str(p.id)+"' class='btn btn-blue'>Editar</a></td>" if is_admin() else "")+"</tr>" for p in ps)
+    linhas = ""
+    for p in ps:
+        margem = calcular_margem(p.preco, p.preco_compra or 0)
+        margem_cls = "margem" if margem >= 30 else "margem-baixa"
+        linhas += "<tr><td>"+p.nome+"</td><td>"+(p.categoria.nome if p.categoria else "-")+"</td><td>Kz "+str(int(p.preco))+"</td><td>Kz "+str(int(p.preco_compra or 0))+"</td><td class='"+margem_cls+"'>"+str(int(margem))+"%</td><td>"+str(p.quantidade)+"</td>"+("<td><a href='/editar/"+str(p.id)+"' class='btn btn-blue'>Editar</a></td>" if is_admin() else "")+"</tr>"
     form = '<form method="POST"><input name="nome" placeholder="Nome" required><select name="categoria"><option value="">Categoria</option>'+cat_opts+'</select><input type="number" name="preco" placeholder="Preco venda" required><input type="number" name="preco_compra" placeholder="Preco compra"><input type="number" name="quantidade" placeholder="Qtd" required><input type="number" name="stock_minimo" placeholder="Stock minimo" value="10"><button>Cadastrar</button></form>' if is_admin() else ""
-    return render_template_string(T, content='<div class="card"><h2>Produtos</h2>'+form+'<table><tr><th>Nome</th><th>Categoria</th><th>Venda</th><th>Compra</th><th>Stock</th>'+("<th></th>" if is_admin() else "")+'</tr>'+linhas+'</table></div>')
+    return render_template_string(T, content='<div class="card"><h2>Produtos</h2>'+form+'<table><tr><th>Nome</th><th>Categoria</th><th>Venda</th><th>Compra</th><th>Margem</th><th>Stock</th>'+("<th></th>" if is_admin() else "")+'</tr>'+linhas+'</table></div>')
 
 @app.route("/editar/<int:id>", methods=["GET","POST"])
 def editar(id):
@@ -311,21 +360,23 @@ def editar(id):
     p = Produto.query.get_or_404(id)
     if request.method == "POST":
         preco_antigo = p.preco
+        preco_compra_antigo = p.preco_compra or 0
         p.nome = request.form["nome"]
         p.preco = float(request.form["preco"])
         p.preco_compra = float(request.form.get("preco_compra",0))
         p.quantidade = int(request.form["quantidade"])
         p.stock_minimo = int(request.form.get("stock_minimo",10))
         p.categoria_id = int(request.form["categoria"]) if request.form.get("categoria") else None
-        if preco_antigo != p.preco:
-            db.session.add(HistoricoPreco(produto_id=p.id, preco_antigo=preco_antigo, preco_novo=p.preco))
+        if preco_antigo != p.preco or preco_compra_antigo != p.preco_compra:
+            db.session.add(HistoricoPreco(produto_id=p.id, preco_antigo=preco_antigo, preco_novo=p.preco, preco_compra_antigo=preco_compra_antigo, preco_compra_novo=p.preco_compra))
         db.session.commit()
         return redirect("/produtos")
     cats = Categoria.query.all()
     cat_opts = "".join('<option value="'+str(c.id)+'"'+(' selected' if p.categoria_id==c.id else '')+'>'+c.nome+'</option>' for c in cats)
+    margem = calcular_margem(p.preco, p.preco_compra or 0)
     hist = HistoricoPreco.query.filter_by(produto_id=p.id).order_by(HistoricoPreco.data.desc()).limit(5).all()
-    hist_linhas = "".join("<tr><td>"+h.data.strftime("%d/%m/%Y")+"</td><td>Kz "+str(int(h.preco_antigo))+"</td><td>Kz "+str(int(h.preco_novo))+"</td></tr>" for h in hist)
-    return render_template_string(T, content='<div class="card"><h2>Editar</h2><form method="POST"><input name="nome" value="'+p.nome+'"><select name="categoria"><option value="">Categoria</option>'+cat_opts+'</select><input type="number" name="preco" value="'+str(p.preco)+'"><input type="number" name="preco_compra" value="'+str(p.preco_compra or 0)+'"><input type="number" name="quantidade" value="'+str(p.quantidade)+'"><input type="number" name="stock_minimo" value="'+str(p.stock_minimo or 10)+'"><button>Guardar</button></form></div><div class="card"><h2>Historico de Precos</h2><table><tr><th>Data</th><th>Antigo</th><th>Novo</th></tr>'+hist_linhas+'</table></div>')
+    hist_linhas = "".join("<tr><td>"+h.data.strftime("%d/%m/%Y")+"</td><td>Kz "+str(int(h.preco_antigo))+"</td><td>Kz "+str(int(h.preco_novo))+"</td><td>Kz "+str(int(h.preco_compra_antigo or 0))+"</td><td>Kz "+str(int(h.preco_compra_novo or 0))+"</td></tr>" for h in hist)
+    return render_template_string(T, content='<div class="card"><h2>Editar</h2><p>Margem atual: <b>'+str(int(margem))+'%</b></p><form method="POST"><input name="nome" value="'+p.nome+'"><select name="categoria"><option value="">Categoria</option>'+cat_opts+'</select><input type="number" name="preco" value="'+str(p.preco)+'"><input type="number" name="preco_compra" value="'+str(p.preco_compra or 0)+'"><input type="number" name="quantidade" value="'+str(p.quantidade)+'"><input type="number" name="stock_minimo" value="'+str(p.stock_minimo or 10)+'"><button>Guardar</button></form></div><div class="card"><h2>Historico de Precos</h2><table><tr><th>Data</th><th>Venda Antiga</th><th>Venda Nova</th><th>Compra Antiga</th><th>Compra Nova</th></tr>'+hist_linhas+'</table></div>')
 
 @app.route("/categorias", methods=["GET","POST"])
 def categorias():
@@ -342,8 +393,8 @@ def categorias():
 def stock():
     if not tem_perm("perm_stock"): return redirect("/")
     ps = Produto.query.order_by(Produto.nome).all()
-    linhas = "".join("<tr><td>"+p.nome+"</td><td>"+str(p.quantidade)+"</td><td>"+str(p.stock_minimo or 10)+"</td><td><form method='POST' action='/ajustar/"+str(p.id)+"' style='display:inline'><input type='hidden' name='acao' value='mais'><button class='g s'>+</button></form> <form method='POST' action='/ajustar/"+str(p.id)+"' style='display:inline'><input type='hidden' name='acao' value='menos'><button class='r s'>-</button></form></td></tr>" for p in ps)
-    return render_template_string(T, content='<div class="card"><h2>Stock</h2><table><tr><th>Produto</th><th>Qtd</th><th>Minimo</th><th>Ajustar</th></tr>'+linhas+'</table></div>')
+    linhas = "".join("<tr><td>"+p.nome+"</td><td>"+str(p.quantidade)+"</td><td>"+str(p.stock_minimo or 10)+"</td><td>"+("Baixo" if p.quantidade <= (p.stock_minimo or 10) else "OK")+"</td><td><form method='POST' action='/ajustar/"+str(p.id)+"' style='display:inline'><input type='hidden' name='acao' value='mais'><button class='g s'>+</button></form> <form method='POST' action='/ajustar/"+str(p.id)+"' style='display:inline'><input type='hidden' name='acao' value='menos'><button class='r s'>-</button></form></td></tr>" for p in ps)
+    return render_template_string(T, content='<div class="card"><h2>Stock</h2><table><tr><th>Produto</th><th>Qtd</th><th>Minimo</th><th>Estado</th><th>Ajustar</th></tr>'+linhas+'</table></div>')
 
 @app.route("/ajustar/<int:id>", methods=["POST"])
 def ajustar(id):
@@ -386,7 +437,13 @@ def dashboard():
         semana.append((d.strftime("%d/%m"), int(total)))
     max_v = max([s[1] for s in semana] or [1]) or 1
     barras = "".join('<div style="display:inline-block;width:40px;text-align:center;margin:0 4px"><div style="background:#e94560;height:'+str(max(5,int(80*s[1]/max_v)))+'px;border-radius:4px"></div><div style="font-size:.7rem">'+s[0]+'</div></div>' for s in semana)
-    return render_template_string(T, content='<h2>Dashboard</h2><div class="grid"><div class="stat">Vendas Hoje<b>Kz '+str(int(bruto))+'</b></div><div class="stat">Lucro<b>Kz '+str(int(lucro))+'</b></div><div class="stat">Caixa<b>Kz '+str(int(cv))+'</b></div><div class="stat">N Vendas<b>'+str(len(vendas))+'</b></div><div class="stat">Compras<b>Kz '+str(int(total_compras))+'</b></div></div><div class="card" style="margin-top:12px"><h2>Vendas da Semana</h2><div style="display:flex;align-items:flex-end;height:100px">'+barras+'</div></div><form method="POST" action="/reiniciar-dashboard" style="margin-top:12px"><button class="r">Reiniciar Dashboard</button></form>')
+    meta_msg = ""
+    if bruto >= META_VENDA:
+        meta_msg += '<div class="parabens"><h3>Parabens!</h3><p>Meta de vendas atingida!</p></div>'
+    if lucro >= META_LUCRO:
+        meta_msg += '<div class="parabens"><h3>Parabens!</h3><p>Meta de lucro atingida!</p></div>'
+    baixos = Produto.query.filter(Produto.quantidade <= Produto.stock_minimo).count()
+    return render_template_string(T, content=meta_msg+'<h2>Dashboard</h2><div class="grid"><div class="stat">Vendas Hoje<b>Kz '+str(int(bruto))+'</b></div><div class="stat">Lucro<b>Kz '+str(int(lucro))+'</b></div><div class="stat">Caixa<b>Kz '+str(int(cv))+'</b></div><div class="stat">N Vendas<b>'+str(len(vendas))+'</b></div><div class="stat">Compras<b>Kz '+str(int(total_compras))+'</b></div><div class="stat">Stock Baixo<b>'+str(baixos)+'</b></div></div><div class="card" style="margin-top:12px"><h2>Vendas da Semana</h2><div style="display:flex;align-items:flex-end;height:100px">'+barras+'</div></div><form method="POST" action="/reiniciar-dashboard" style="margin-top:12px"><button class="r">Reiniciar Dashboard</button></form>')
 
 @app.route("/reiniciar-dashboard", methods=["POST"])
 def reiniciar_dashboard():
@@ -400,7 +457,7 @@ def reiniciar_dashboard():
 @app.route("/exportar")
 def exportar():
     if not is_admin(): return redirect("/")
-    return render_template_string(T, content='<div class="card"><h2>Exportar</h2><p><a href="/exportar-csv" class="btn btn-green">Descarregar Excel (CSV)</a></p></div>')
+    return render_template_string(T, content='<div class="card"><h2>Exportar</h2><p><a href="/exportar-csv" class="btn btn-green">Descarregar Vendas (CSV)</a></p><p style="margin-top:8px"><a href="/exportar-mensal" class="btn btn-blue">Descarregar Relatorio Mensal (CSV)</a></p></div>')
 
 @app.route("/exportar-csv")
 def exportar_csv():
@@ -419,8 +476,23 @@ def utilizadores():
     users = Usuario.query.all()
     linhas = ""
     for u in users:
-        linhas += '<tr><td>'+u.nome+'</td><td>'+u.email+'</td><td>'+(u.tipo or "funcionario")+'</td><td><a href="/permissoes/'+str(u.id)+'" class="btn btn-blue">Permissoes</a> <a href="/redefinir/'+str(u.id)+'" class="btn btn-orange">Senha</a> <a href="/dar-tudo/'+str(u.id)+'" class="btn btn-purple">Dar tudo</a></td></tr>'
+        linhas += '<tr><td>'+u.nome+'</td><td>'+u.email+'</td><td>'+(u.tipo or "funcionario")+'</td><td><a href="/permissoes/'+str(u.id)+'" class="btn btn-blue">Permissoes</a> <a href="/redefinir/'+str(u.id)+'" class="btn btn-orange">Senha</a> <a href="/dar-tudo/'+str(u.id)+'" class="btn btn-purple">Dar tudo</a>'
+        if u.tipo != "admin":
+            linhas += ' <form method="POST" action="/eliminar-utilizador/'+str(u.id)+'" style="display:inline"><button class="btn btn-red" onclick="return confirm(\'Eliminar este utilizador?\')">Eliminar</button></form>'
+        linhas += '</td></tr>'
     return render_template_string(T, content='<div class="card"><h2>Utilizadores</h2><p><a href="/criar-utilizador" class="btn btn-green">Criar Utilizador</a></p><table><tr><th>Nome</th><th>Email</th><th>Tipo</th><th>Acoes</th></tr>'+linhas+'</table></div>')
+
+@app.route("/eliminar-utilizador/<int:id>", methods=["POST"])
+def eliminar_utilizador(id):
+    if not is_admin(): return redirect("/")
+    u = Usuario.query.get_or_404(id)
+    if u.tipo == "admin":
+        flash("Nao podes eliminar o administrador")
+        return redirect("/utilizadores")
+    db.session.delete(u)
+    db.session.commit()
+    flash("Utilizador eliminado")
+    return redirect("/utilizadores")
 
 @app.route("/criar-utilizador", methods=["GET","POST"])
 def criar_utilizador():
@@ -534,6 +606,10 @@ if __name__ == "__main__":
             db.session.execute(db.text("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS perm_hoje BOOLEAN DEFAULT FALSE"))
             db.session.execute(db.text("ALTER TABLE venda ADD COLUMN IF NOT EXISTS lucro FLOAT DEFAULT 0"))
             db.session.execute(db.text("ALTER TABLE fechamento_dia ADD COLUMN IF NOT EXISTS total_lucro FLOAT DEFAULT 0"))
+            db.session.execute(db.text("ALTER TABLE fechamento_dia ADD COLUMN IF NOT EXISTS meta_atingida BOOLEAN DEFAULT FALSE"))
+            db.session.execute(db.text("ALTER TABLE fechamento_dia ADD COLUMN IF NOT EXISTS meta_lucro_atingida BOOLEAN DEFAULT FALSE"))
+            db.session.execute(db.text("ALTER TABLE historico_preco ADD COLUMN IF NOT EXISTS preco_compra_antigo FLOAT"))
+            db.session.execute(db.text("ALTER TABLE historico_preco ADD COLUMN IF NOT EXISTS preco_compra_novo FLOAT"))
             db.session.commit()
         except:
             db.session.rollback()
