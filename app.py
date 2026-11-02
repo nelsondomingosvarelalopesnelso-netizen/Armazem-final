@@ -119,8 +119,15 @@ button{background:#2e7d32;color:#fff;border:none;font-weight:500;cursor:pointer}
 .box.destaque{border:2px solid #ff9800;background:#fff8e1}
 .box b{display:block;color:#1b5e20;margin-bottom:3px}
 .box div{font-size:.75rem;color:#555;margin:2px 0}
-.stat{background:#fff;border-radius:10px;padding:12px;text-align:center;border-top:3px solid #2e7d32}
-.stat b{display:block;font-size:1.2rem;margin-top:3px;color:#1b5e20}
+.stat{background:#fff;border-radius:12px;padding:16px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.08);border-top:4px solid #2e7d32}
+.stat b{display:block;font-size:1.4rem;margin-top:6px;font-weight:700}
+.stat.venda{border-top-color:#1565c0}.stat.venda b{color:#1565c0}
+.stat.lucro{border-top-color:#2e7d32}.stat.lucro b{color:#2e7d32}
+.stat.caixa{border-top-color:#f57c00}.stat.caixa b{color:#f57c00}
+.stat.nvendas{border-top-color:#6a1b9a}.stat.nvendas b{color:#6a1b9a}
+.stat.compras{border-top-color:#00838f}.stat.compras b{color:#00838f}
+.stat.restos{border-top-color:#d84315}.stat.restos b{color:#d84315}
+.stat.stock{border-top-color:#c62828}.stat.stock b{color:#c62828}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{background:#c8e6c9;padding:7px;text-align:left}
 td{padding:7px;border-bottom:1px solid #eee}
@@ -317,8 +324,23 @@ def calculadora():
 def relatorio():
     if not tem_perm("perm_relatorio"): return redirect("/")
     fs = FechamentoDia.query.order_by(FechamentoDia.data_fechamento.desc()).all()
-    linhas = "".join("<tr><td>"+f.data.strftime("%d/%m/%Y")+"</td><td>Kz "+str(int(f.total_bruto or 0))+"</td><td>Kz "+str(int(f.total_lucro or 0))+"</td><td>Kz "+str(int(f.caixa or 0))+"</td><td>"+str(f.qtd_vendas or 0)+"</td><td>"+("Sim" if f.meta_atingida else "Nao")+"</td><td>"+("Sim" if f.meta_lucro_atingida else "Nao")+"</td></tr>" for f in fs)
-    return render_template_string(T, content='<div class="card"><h2>Relatorio</h2><table><tr><th>Data</th><th>Total</th><th>Lucro</th><th>Caixa</th><th>Vendas</th><th>Meta Venda</th><th>Meta Lucro</th></tr>'+linhas+'</table></div>')
+    linhas = ""
+    for f in fs:
+        linhas += "<tr><td>"+f.data.strftime("%d/%m/%Y")+"</td><td>Kz "+str(int(f.total_bruto or 0))+"</td><td>Kz "+str(int(f.total_lucro or 0))+"</td><td>Kz "+str(int(f.caixa or 0))+"</td><td>"+str(f.qtd_vendas or 0)+"</td><td>"+("Sim" if f.meta_atingida else "Nao")+"</td><td>"+("Sim" if f.meta_lucro_atingida else "Nao")+"</td>"
+        if is_admin():
+            linhas += "<td><form method='POST' action='/eliminar-relatorio/"+str(f.id)+"' style='display:inline'><button class='btn btn-red' onclick=\"return confirm('Eliminar este relatório?')\">Eliminar</button></form></td>"
+        linhas += "</tr>"
+    header_extra = "<th></th>" if is_admin() else ""
+    return render_template_string(T, content='<div class="card"><h2>Relatorio</h2><table><tr><th>Data</th><th>Total</th><th>Lucro</th><th>Caixa</th><th>Vendas</th><th>Meta Venda</th><th>Meta Lucro</th>'+header_extra+'</tr>'+linhas+'</table></div>')
+
+@app.route("/eliminar-relatorio/<int:id>", methods=["POST"])
+def eliminar_relatorio(id):
+    if not is_admin(): return redirect("/")
+    f = FechamentoDia.query.get_or_404(id)
+    db.session.delete(f)
+    db.session.commit()
+    flash("Relatório eliminado")
+    return redirect("/relatorio")
 
 @app.route("/mensal")
 def mensal():
@@ -486,7 +508,15 @@ def dashboard():
     if lucro >= META_LUCRO:
         meta_msg += '<div class="parabens"><h3>Parabens!</h3><p>Meta de lucro atingida!</p></div>'
     baixos = Produto.query.filter(Produto.quantidade <= Produto.stock_minimo).count()
-    return render_template_string(T, content=meta_msg+'<h2>Dashboard</h2><div class="grid"><div class="stat">Vendas Hoje<b>Kz '+str(int(bruto))+'</b></div><div class="stat">Lucro<b>Kz '+str(int(lucro))+'</b></div><div class="stat">Caixa<b>Kz '+str(int(cv))+'</b></div><div class="stat">N Vendas<b>'+str(len(vendas))+'</b></div><div class="stat">Compras<b>Kz '+str(int(total_compras))+'</b></div><div class="stat">Restos<b>Kz '+str(int(total_restos))+'</b></div><div class="stat">Stock Baixo<b>'+str(baixos)+'</b></div></div><div class="card" style="margin-top:12px"><h2>Vendas da Semana</h2><div style="display:flex;align-items:flex-end;height:100px">'+barras+'</div></div><form method="POST" action="/reiniciar-dashboard" style="margin-top:12px"><button class="r">Reiniciar Dashboard</button></form>')
+    return render_template_string(T, content=meta_msg+'<h2>Dashboard</h2><div class="grid">'
+        '<div class="stat venda">Vendas Hoje<b>Kz '+str(int(bruto))+'</b></div>'
+        '<div class="stat lucro">Lucro<b>Kz '+str(int(lucro))+'</b></div>'
+        '<div class="stat caixa">Caixa<b>Kz '+str(int(cv))+'</b></div>'
+        '<div class="stat nvendas">N Vendas<b>'+str(len(vendas))+'</b></div>'
+        '<div class="stat compras">Compras<b>Kz '+str(int(total_compras))+'</b></div>'
+        '<div class="stat restos">Restos<b>Kz '+str(int(total_restos))+'</b></div>'
+        '<div class="stat stock">Stock Baixo<b>'+str(baixos)+'</b></div>'
+        '</div><div class="card" style="margin-top:12px"><h2>Vendas da Semana</h2><div style="display:flex;align-items:flex-end;height:100px">'+barras+'</div></div><form method="POST" action="/reiniciar-dashboard" style="margin-top:12px"><button class="r">Reiniciar Dashboard</button></form>')
 
 @app.route("/reiniciar-dashboard", methods=["POST"])
 def reiniciar_dashboard():
