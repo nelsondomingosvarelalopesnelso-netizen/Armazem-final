@@ -289,6 +289,41 @@ def finalizar():
         flash("Parabéns! Atingiste a meta de lucro!")
     return redirect("/hoje")
 
+@app.route("/historico")
+def historico():
+    if not tem_perm("perm_historico"): return redirect("/")
+    data_filtro = request.args.get("data", "")
+    produto_filtro = request.args.get("produto", "")
+    query = Venda.query
+    if data_filtro:
+        try:
+            d = datetime.strptime(data_filtro, "%Y-%m-%d").date()
+            query = query.filter(db.func.date(Venda.data) == d)
+        except: pass
+    if produto_filtro:
+        query = query.join(Produto).filter(Produto.nome.ilike("%"+produto_filtro+"%"))
+    vendas = query.order_by(Venda.data.desc()).limit(200).all()
+    linhas = "".join("<tr><td>"+v.data.strftime("%d/%m/%Y")+"</td><td>"+v.data.strftime("%H:%M")+"</td><td>"+v.produto.nome+"</td><td>"+str(v.quantidade)+"</td><td>Kz "+str(int(v.valor_total))+"</td></tr>" for v in vendas)
+    return render_template_string(T, content='<div class="card"><h2>Histórico</h2><form method="GET"><input type="date" name="data" value="'+data_filtro+'"><input name="produto" placeholder="Produto" value="'+produto_filtro+'"><button>Pesquisar</button></form><table><tr><th>Data</th><th>Hora</th><th>Produto</th><th>Qtd</th><th>Valor</th></tr>'+linhas+'</table></div>')
+
+@app.route("/lucro")
+def lucro():
+    if not tem_perm("perm_lucro"): return redirect("/")
+    hoje = date.today()
+    vendas = Venda.query.filter(db.func.date(Venda.data)==hoje).all()
+    total_venda = sum(v.valor_total for v in vendas)
+    total_lucro = sum(v.lucro or 0 for v in vendas)
+    por_produto = {}
+    for v in vendas:
+        if v.produto.nome not in por_produto:
+            por_produto[v.produto.nome] = {"qtd":0,"venda":0,"lucro":0}
+        por_produto[v.produto.nome]["qtd"] += v.quantidade
+        por_produto[v.produto.nome]["venda"] += v.valor_total
+        por_produto[v.produto.nome]["lucro"] += v.lucro or 0
+    linhas = "".join("<tr><td>"+n+"</td><td>"+str(d["qtd"])+"</td><td>Kz "+str(int(d["venda"]))+"</td><td>Kz "+str(int(d["lucro"]))+"</td></tr>" for n,d in por_produto.items())
+    meta_status = "Atingida" if total_lucro >= META_LUCRO else "Em progresso"
+    return render_template_string(T, content='<div class="card"><h2>Lucro de Hoje</h2><p>Total vendas: <b>Kz '+str(int(total_venda))+'</b></p><p>Lucro: <b>Kz '+str(int(total_lucro))+'</b></p><p>Meta lucro: Kz '+str(META_LUCRO)+' ('+meta_status+')</p><table><tr><th>Produto</th><th>Qtd</th><th>Venda</th><th>Lucro</th></tr>'+linhas+'</table></div>')
+
 @app.route("/valor-stock")
 def valor_stock():
     if not is_admin(): return redirect("/")
@@ -396,25 +431,61 @@ def eliminar_relatorio(id):
     flash("Relatório eliminado")
     return redirect("/relatorio")
 
-@app.route("/mensal")
-def mensal():
-    if not is_admin(): return redirect("/")
+@app.route("/dashboard")
+def dashboard():
+    if "user_id" not in session: return redirect("/login")
+    if not is_admin():
+        return render_template_string(T, content='<div class="card"><h2>Bem-vindo</h2><p>Usa o menu para vender.</p></div>')
+    uid = session["user_id"]
     hoje = date.today()
-    inicio = hoje.replace(day=1)
-    fs = FechamentoDia.query.filter(FechamentoDia.data >= inicio).order_by(FechamentoDia.data).all()
-    total_mes = sum(f.total_liquido for f in fs)
-    total_lucro = sum(f.total_lucro or 0 for f in fs)
-    dias = []
-    for i in range(1, hoje.day+1):
-        d = date(hoje.year, hoje.month, i)
-        f = next((x for x in fs if x.data == d), None)
-        dias.append((d.strftime("%d"), int(f.total_liquido) if f else 0))
-    max_v = max([d[1] for d in dias] or [1]) or 1
-    barras = ""
-    for d in dias:
-        h = max(8, int(100 * d[1] / max_v))
-        barras += '<div class="bar"><div class="bar-fill" style="height:'+str(h)+'px"></div><div class="bar-label">'+d[0]+'</div></div>'
-    return render_template_string(T, content='<div class="card"><h2>Relatório Mensal</h2><p>Total: <b>Kz '+str(int(total_mes))+'</b></p><p>Lucro: <b>Kz '+str(int(total_lucro))+'</b></p><div class="bar-container">'+barras+'</div></div>')
+    ontem = hoje - timedelta(days=1)
+    
+    vendas_hoje = Venda.query.filter(db.func.date(Venda.data)==hoje).all()
+    vendas_ontem = Venda.query.filter(db.func.date(Venda.data)==ontem).all()
+    
+    bruto_hoje = sum(v.valor_total for v in vendas_hoje)
+    lucro_hoje = sum(v.lucro or 0 for v in vendas_hoje)
+    bruto_ontem = sum(v.valor_total for v in vendas_ontem)
+    lucro_ontem = sum(v.lucro or 0 for v in vendas_ontem)
+    
+    caixa = Caixa.query.filter_by(user_id=uid).first()
+    cv = caixa.valor if caixa else 0
+    compras_hoje = Compra.query.filter(db.func.date(Compra.data)==hoje).all()
+    restos_hoje = Resto.query.filter(db.func.date(Resto.data)==hoje).all()
+    total_compras = sum(c.valor for c in compras_hoje)
+    total_restos = sum(r.valor for r in restos_hoje)
+    
+    baixos = Produto.query.filter(Produto.quantidade <= Produto.stock_minimo).count()
+    valor_stock = sum((p.preco_compra or 0) * p.quantidade for p in Produto.query.all())
+    
+    meta_msg = ""
+    if bruto_hoje >= META_VENDA:
+        meta_msg += '<div class="parabens"><h3>Parabéns!</h3><p>Meta de vendas atingida!</p></div>'
+    if lucro_hoje >= META_LUCRO:
+        meta_msg += '<div class="parabens"><h3>Parabéns!</h3><p>Meta de lucro atingida!</p></div>'
+    
+    return render_template_string(T, content=meta_msg+'''
+    <h2>Dashboard</h2>
+    <div class="grid">
+        <div class="stat venda">Vendas Hoje<b>Kz '''+str(int(bruto_hoje))+'''</b><div style="font-size:.75rem;color:#666">Ontem: Kz '''+str(int(bruto_ontem))+'''</div></div>
+        <div class="stat lucro">Lucro Hoje<b>Kz '''+str(int(lucro_hoje))+'''</b><div style="font-size:.75rem;color:#666">Ontem: Kz '''+str(int(lucro_ontem))+'''</div></div>
+        <div class="stat caixa">Caixa<b>Kz '''+str(int(cv))+'''</b></div>
+        <div class="stat nvendas">Nº Vendas<b>'''+str(len(vendas_hoje))+'''</b></div>
+        <div class="stat compras">Compras<b>Kz '''+str(int(total_compras))+'''</b></div>
+        <div class="stat restos">Restos<b>Kz '''+str(int(total_restos))+'''</b></div>
+        <div class="stat stock">Stock Baixo<b>'''+str(baixos)+'''</b></div>
+        <div class="stat valor-stock">Valor em Stock<b>Kz '''+str(int(valor_stock))+'''</b></div>
+    </div>
+    <form method="POST" action="/reiniciar-dashboard" style="margin-top:12px"><button class="r">Reiniciar Dashboard</button></form>
+    ''')
+
+@app.route("/reiniciar-dashboard", methods=["POST"])
+def reiniciar_dashboard():
+    if not is_admin(): return redirect("/")
+    Venda.query.filter(db.func.date(Venda.data)==date.today()).delete()
+    db.session.commit()
+    flash("Dashboard reiniciado")
+    return redirect("/dashboard")
 
 @app.route("/caixa", methods=["GET","POST"])
 def caixa():
@@ -528,62 +599,6 @@ def restos():
     items = Resto.query.filter_by(user_id=uid).order_by(Resto.data.desc()).all()
     linhas = "".join("<tr><td>"+r.descricao+"</td><td>Kz "+str(int(r.valor))+"</td><td>"+r.data.strftime("%d/%m/%Y")+"</td></tr>" for r in items)
     return render_template_string(T, content='<div class="card"><h2>Restos</h2><form method="POST"><input name="descricao" placeholder="Descrição" required><input type="number" name="valor" placeholder="Valor" required><button>Registar</button></form><table><tr><th>Descrição</th><th>Valor</th><th>Data</th></tr>'+linhas+'</table></div>')
-
-@app.route("/dashboard")
-def dashboard():
-    if "user_id" not in session: return redirect("/login")
-    if not is_admin():
-        return render_template_string(T, content='<div class="card"><h2>Bem-vindo</h2><p>Usa o menu para vender.</p></div>')
-    uid = session["user_id"]
-    hoje = date.today()
-    ontem = hoje - timedelta(days=1)
-    
-    vendas_hoje = Venda.query.filter(db.func.date(Venda.data)==hoje).all()
-    vendas_ontem = Venda.query.filter(db.func.date(Venda.data)==ontem).all()
-    
-    bruto_hoje = sum(v.valor_total for v in vendas_hoje)
-    lucro_hoje = sum(v.lucro or 0 for v in vendas_hoje)
-    bruto_ontem = sum(v.valor_total for v in vendas_ontem)
-    lucro_ontem = sum(v.lucro or 0 for v in vendas_ontem)
-    
-    caixa = Caixa.query.filter_by(user_id=uid).first()
-    cv = caixa.valor if caixa else 0
-    compras_hoje = Compra.query.filter(db.func.date(Compra.data)==hoje).all()
-    restos_hoje = Resto.query.filter(db.func.date(Resto.data)==hoje).all()
-    total_compras = sum(c.valor for c in compras_hoje)
-    total_restos = sum(r.valor for r in restos_hoje)
-    
-    baixos = Produto.query.filter(Produto.quantidade <= Produto.stock_minimo).count()
-    valor_stock = sum((p.preco_compra or 0) * p.quantidade for p in Produto.query.all())
-    
-    meta_msg = ""
-    if bruto_hoje >= META_VENDA:
-        meta_msg += '<div class="parabens"><h3>Parabéns!</h3><p>Meta de vendas atingida!</p></div>'
-    if lucro_hoje >= META_LUCRO:
-        meta_msg += '<div class="parabens"><h3>Parabéns!</h3><p>Meta de lucro atingida!</p></div>'
-    
-    return render_template_string(T, content=meta_msg+'''
-    <h2>Dashboard</h2>
-    <div class="grid">
-        <div class="stat venda">Vendas Hoje<b>Kz '''+str(int(bruto_hoje))+'''</b><div style="font-size:.75rem;color:#666">Ontem: Kz '''+str(int(bruto_ontem))+'''</div></div>
-        <div class="stat lucro">Lucro Hoje<b>Kz '''+str(int(lucro_hoje))+'''</b><div style="font-size:.75rem;color:#666">Ontem: Kz '''+str(int(lucro_ontem))+'''</div></div>
-        <div class="stat caixa">Caixa<b>Kz '''+str(int(cv))+'''</b></div>
-        <div class="stat nvendas">Nº Vendas<b>'''+str(len(vendas_hoje))+'''</b></div>
-        <div class="stat compras">Compras<b>Kz '''+str(int(total_compras))+'''</b></div>
-        <div class="stat restos">Restos<b>Kz '''+str(int(total_restos))+'''</b></div>
-        <div class="stat stock">Stock Baixo<b>'''+str(baixos)+'''</b></div>
-        <div class="stat valor-stock">Valor em Stock<b>Kz '''+str(int(valor_stock))+'''</b></div>
-    </div>
-    <form method="POST" action="/reiniciar-dashboard" style="margin-top:12px"><button class="r">Reiniciar Dashboard</button></form>
-    ''')
-
-@app.route("/reiniciar-dashboard", methods=["POST"])
-def reiniciar_dashboard():
-    if not is_admin(): return redirect("/")
-    Venda.query.filter(db.func.date(Venda.data)==date.today()).delete()
-    db.session.commit()
-    flash("Dashboard reiniciado")
-    return redirect("/dashboard")
 
 @app.route("/exportar")
 def exportar():
