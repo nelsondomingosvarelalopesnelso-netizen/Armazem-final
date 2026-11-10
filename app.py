@@ -15,6 +15,12 @@ class Usuario(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     senha = db.Column(db.String(200), nullable=False)
     tipo = db.Column(db.String(20), default="funcionario")
+    perm_hoje = db.Column(db.Boolean, default=False)
+    perm_relatorio = db.Column(db.Boolean, default=False)
+    perm_produtos = db.Column(db.Boolean, default=False)
+    perm_stock = db.Column(db.Boolean, default=False)
+    perm_compras = db.Column(db.Boolean, default=False)
+    perm_restos = db.Column(db.Boolean, default=False)
 
 class Produto(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -69,7 +75,12 @@ class ResetDashboard(db.Model):
 
 T = """<!DOCTYPE html><html lang="pt"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Armazém</title><style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
-body{background:#f8f9fa;color:#212529}
+body{background:#f8f9fa;color:#212529;transition:background .3s}
+body.dark{background:#121212;color:#e0e0e0}
+body.dark .card,body.dark .box,body.dark .stat{background:#1e1e1e;color:#e0e0e0}
+body.dark .top{background:#0a1929}
+body.dark th{background:#1a3a5c;color:#fff}
+body.dark input,body.dark select,body.dark textarea{background:#2a2a2a;color:#fff;border-color:#444}
 .top{background:#1a365d;color:#fff;padding:12px 16px;position:sticky;top:0;z-index:50}
 .top h1{font-size:1.1rem}
 .top .user{font-size:.75rem;opacity:.85;margin-top:2px}
@@ -88,13 +99,23 @@ button{background:#2b6cb0;color:#fff;border:none;font-weight:500;cursor:pointer}
 .box div{font-size:.75rem;color:#555;margin:2px 0}
 .stat{background:#fff;border-radius:12px;padding:16px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.08);border-top:4px solid #2b6cb0}
 .stat b{display:block;font-size:1.5rem;margin-top:6px;font-weight:700}
+.stat.venda b{color:#2b6cb0}
+.stat.lucro b{color:#2f855a}
+.stat.compras b{color:#dd6b20}
+.stat.stock b{color:#6b46c1}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{background:#edf2f7;padding:7px;text-align:left}
 td{padding:7px;border-bottom:1px solid #eee}
 .flash{background:#e6fffa;padding:8px 12px;border-radius:6px;margin-bottom:10px;font-size:.85rem}
 .btn{display:inline-block;padding:6px 12px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:500;margin:2px;background:#2b6cb0;color:#fff}
 .btn-red{background:#c53030}
-</style></head><body>{% if session.get('user_id') %}<div class="top"><h1>Armazém</h1><div class="user">{{ session.get('nome','') }}</div><div class="nav"><a href="/">Vender</a><a href="/dashboard">Dashboard</a><a href="/resumo">Resumo do Dia</a><a href="/hoje">Hoje</a><a href="/relatorio">Relatório</a><a href="/ranking">Ranking</a><a href="/caixa">Caixa</a><a href="/produtos">Produtos</a><a href="/stock">Stock</a><a href="/compras">Compras</a><a href="/restos">Restos</a><a href="/logout">Sair</a></div></div>{% endif %}<div class="c">{% with messages = get_flashed_messages() %}{% if messages %}{% for msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}{% endif %}{% endwith %}{{ content|safe }}</div></body></html>"""
+.btn-green{background:#2f855a}
+</style></head><body id="body">{% if session.get('user_id') %}<div class="top"><h1>Armazém</h1><div class="user">{{ session.get('nome','') }}</div><div class="nav"><a href="/">Vender</a><a href="/dashboard">Dashboard</a><a href="/resumo">Resumo do Dia</a><a href="/hoje">Hoje</a><a href="/relatorio">Relatório</a><a href="/ranking">Ranking</a><a href="/caixa">Caixa</a><a href="/produtos">Produtos</a><a href="/stock">Stock</a><a href="/compras">Compras</a><a href="/restos">Restos</a><a href="/utilizadores">Utilizadores</a><a href="#" onclick="toggleDark();return false;">Modo</a><a href="/logout">Sair</a></div></div>{% endif %}<div class="c">{% with messages = get_flashed_messages() %}{% if messages %}{% for msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}{% endif %}{% endwith %}{{ content|safe }}</div>
+<script>
+function toggleDark(){document.getElementById('body').classList.toggle('dark');localStorage.setItem('dark',document.getElementById('body').classList.contains('dark'))}
+if(localStorage.getItem('dark')==='true')document.getElementById('body').classList.add('dark')
+</script>
+</body></html>"""
 
 def is_admin():
     return session.get("tipo") == "admin"
@@ -180,13 +201,13 @@ def dashboard():
     return render_template_string(T, content=f'''
     <h2>Dashboard</h2>
     <div class="grid">
-        <div class="stat">Vendas (desde último reset)<b>Kz {int(bruto)}</b><div style="font-size:.75rem;color:#666">Ontem: Kz {int(bruto_ontem)}</div></div>
-        <div class="stat">Lucro<b>Kz {int(lucro)}</b></div>
+        <div class="stat venda">Vendas (desde último reset)<b>Kz {int(bruto)}</b><div style="font-size:.75rem;color:#666">Ontem: Kz {int(bruto_ontem)}</div></div>
+        <div class="stat lucro">Lucro<b>Kz {int(lucro)}</b></div>
         <div class="stat">Nº Vendas<b>{len(vendas)}</b></div>
-        <div class="stat">Compras<b>Kz {int(total_compras)}</b></div>
+        <div class="stat compras">Compras<b>Kz {int(total_compras)}</b></div>
         <div class="stat">Restos<b>Kz {int(total_restos)}</b></div>
         <div class="stat">Caixa<b>Kz {int(cv)}</b></div>
-        <div class="stat">Valor em Stock<b>Kz {int(valor_stock)}</b></div>
+        <div class="stat stock">Valor em Stock<b>Kz {int(valor_stock)}</b></div>
         <div class="stat">Stock Baixo<b>{baixos}</b></div>
     </div>
     {botao}
@@ -222,7 +243,24 @@ def resumo():
 @app.route("/ranking")
 def ranking():
     if "user_id" not in session: return redirect("/login")
-    vendas = Venda.query.filter(Venda.data >= get_ultimo_reset()).all()
+    periodo = request.args.get("periodo", "hoje")
+    if periodo == "ontem":
+        d = date.today() - timedelta(days=1)
+        vendas = Venda.query.filter(db.func.date(Venda.data)==d)
+        titulo = "Ranking de Ontem"
+    elif periodo == "semana":
+        inicio = date.today() - timedelta(days=6)
+        vendas = Venda.query.filter(Venda.data >= inicio)
+        titulo = "Ranking da Semana"
+    elif periodo == "mes":
+        inicio = date.today().replace(day=1)
+        vendas = Venda.query.filter(Venda.data >= inicio)
+        titulo = "Ranking do Mês"
+    else:
+        vendas = Venda.query.filter(db.func.date(Venda.data)==date.today())
+        titulo = "Ranking de Hoje"
+    
+    vendas = vendas.all()
     por_produto = {}
     for v in vendas:
         nome = v.produto.nome
@@ -232,7 +270,8 @@ def ranking():
         por_produto[nome]["valor"] += v.valor_total
     ranking = sorted(por_produto.items(), key=lambda x: x[1]["valor"], reverse=True)
     linhas = "".join(f"<tr><td>{i+1}</td><td>{n}</td><td>{d['qtd']}</td><td>Kz {int(d['valor'])}</td></tr>" for i,(n,d) in enumerate(ranking))
-    return render_template_string(T, content=f'<div class="card"><h2>Ranking</h2><table><tr><th>#</th><th>Produto</th><th>Qtd</th><th>Valor</th></tr>{linhas}</table></div>')
+    filtros = f'<p><a href="/ranking?periodo=hoje">Hoje</a> | <a href="/ranking?periodo=ontem">Ontem</a> | <a href="/ranking?periodo=semana">Semana</a> | <a href="/ranking?periodo=mes">Mês</a></p>'
+    return render_template_string(T, content=f'<div class="card"><h2>{titulo}</h2>{filtros}<table><tr><th>#</th><th>Produto</th><th>Qtd</th><th>Valor</th></tr>{linhas}</table></div>')
 
 @app.route("/hoje")
 def hoje():
@@ -386,6 +425,44 @@ def caixa():
         return redirect("/caixa")
     return render_template_string(T, content=f'<div class="card"><h2>Caixa</h2><p>Kz {int(c.valor)}</p><form method="POST"><input type="number" name="valor" value="{c.valor}"><button>Alterar</button></form></div>')
 
+@app.route("/utilizadores")
+def utilizadores():
+    if not is_admin(): return redirect("/")
+    users = Usuario.query.all()
+    linhas = "".join(f"<tr><td>{u.nome}</td><td>{u.email}</td><td>{u.tipo}</td><td><a href='/permissoes/{u.id}' class='btn'>Permissões</a></td></tr>" for u in users)
+    return render_template_string(T, content=f'<div class="card"><h2>Utilizadores</h2><p><a href="/criar-utilizador" class="btn btn-green">Criar Utilizador</a></p><table><tr><th>Nome</th><th>Email</th><th>Tipo</th><th></th></tr>{linhas}</table></div>')
+
+@app.route("/criar-utilizador", methods=["GET","POST"])
+def criar_utilizador():
+    if not is_admin(): return redirect("/")
+    if request.method == "POST":
+        if not Usuario.query.filter_by(email=request.form["email"]).first():
+            db.session.add(Usuario(nome=request.form["nome"], email=request.form["email"], senha=generate_password_hash(request.form["senha"]), tipo="funcionario"))
+            db.session.commit()
+            flash("Utilizador criado")
+            return redirect("/utilizadores")
+        flash("Email já existe")
+    return render_template_string(T, content='<div class="card"><h2>Criar Utilizador</h2><form method="POST"><input name="nome" placeholder="Nome" required><input type="email" name="email" placeholder="Email" required><input type="password" name="senha" placeholder="Senha" required><button>Criar</button></form></div>')
+
+@app.route("/permissoes/<int:id>", methods=["GET","POST"])
+def permissoes(id):
+    if not is_admin(): return redirect("/")
+    u = Usuario.query.get_or_404(id)
+    if request.method == "POST":
+        u.perm_hoje = "perm_hoje" in request.form
+        u.perm_relatorio = "perm_relatorio" in request.form
+        u.perm_produtos = "perm_produtos" in request.form
+        u.perm_stock = "perm_stock" in request.form
+        u.perm_compras = "perm_compras" in request.form
+        u.perm_restos = "perm_restos" in request.form
+        db.session.commit()
+        return redirect("/utilizadores")
+    checks = ""
+    for p, label in [("perm_hoje","Hoje"),("perm_relatorio","Relatório"),("perm_produtos","Produtos"),("perm_stock","Stock"),("perm_compras","Compras"),("perm_restos","Restos")]:
+        checked = " checked" if getattr(u, p) else ""
+        checks += f'<label style="display:block;margin:6px 0"><input type="checkbox" name="{p}"{checked}> {label}</label>'
+    return render_template_string(T, content=f'<div class="card"><h2>Permissões de {u.nome}</h2><form method="POST">{checks}<button>Guardar</button></form></div>')
+
 @app.route("/login", methods=["GET","POST"])
 def login():
     if request.method == "POST":
@@ -406,4 +483,15 @@ def logout():
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
+        try:
+            db.session.execute(db.text("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS perm_hoje BOOLEAN DEFAULT FALSE"))
+            db.session.execute(db.text("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS perm_relatorio BOOLEAN DEFAULT FALSE"))
+            db.session.execute(db.text("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS perm_produtos BOOLEAN DEFAULT FALSE"))
+            db.session.execute(db.text("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS perm_stock BOOLEAN DEFAULT FALSE"))
+            db.session.execute(db.text("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS perm_compras BOOLEAN DEFAULT FALSE"))
+            db.session.execute(db.text("ALTER TABLE usuario ADD COLUMN IF NOT EXISTS perm_restos BOOLEAN DEFAULT FALSE"))
+            db.session.commit()
+        except Exception as e:
+            print(e)
+            db.session.rollback()
     app.run(host="0.0.0.0", port=5001, debug=True)
