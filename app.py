@@ -15,12 +15,6 @@ class Usuario(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     senha = db.Column(db.String(200), nullable=False)
     tipo = db.Column(db.String(20), default="funcionario")
-    perm_hoje = db.Column(db.Boolean, default=False)
-    perm_relatorio = db.Column(db.Boolean, default=False)
-    perm_produtos = db.Column(db.Boolean, default=False)
-    perm_stock = db.Column(db.Boolean, default=False)
-    perm_compras = db.Column(db.Boolean, default=False)
-    perm_restos = db.Column(db.Boolean, default=False)
 
 class Produto(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -100,8 +94,7 @@ td{padding:7px;border-bottom:1px solid #eee}
 .flash{background:#e6fffa;padding:8px 12px;border-radius:6px;margin-bottom:10px;font-size:.85rem}
 .btn{display:inline-block;padding:6px 12px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:500;margin:2px;background:#2b6cb0;color:#fff}
 .btn-red{background:#c53030}
-.btn-green{background:#2f855a}
-</style></head><body>{% if session.get('user_id') %}<div class="top"><h1>Armazém</h1><div class="user">{{ session.get('nome','') }}</div><div class="nav"><a href="/">Vender</a><a href="/dashboard">Dashboard</a><a href="/resumo">Resumo do Dia</a><a href="/hoje">Hoje</a><a href="/relatorio">Relatório</a><a href="/ranking">Ranking</a><a href="/caixa">Caixa</a><a href="/produtos">Produtos</a><a href="/stock">Stock</a><a href="/compras">Compras</a><a href="/restos">Restos</a><a href="/utilizadores">Utilizadores</a><a href="/logout">Sair</a></div></div>{% endif %}<div class="c">{% with messages = get_flashed_messages() %}{% if messages %}{% for msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}{% endif %}{% endwith %}{{ content|safe }}</div></body></html>"""
+</style></head><body>{% if session.get('user_id') %}<div class="top"><h1>Armazém</h1><div class="user">{{ session.get('nome','') }}</div><div class="nav"><a href="/">Vender</a><a href="/dashboard">Dashboard</a><a href="/resumo">Resumo do Dia</a><a href="/hoje">Hoje</a><a href="/relatorio">Relatório</a><a href="/ranking">Ranking</a><a href="/caixa">Caixa</a><a href="/produtos">Produtos</a><a href="/stock">Stock</a><a href="/compras">Compras</a><a href="/restos">Restos</a><a href="/logout">Sair</a></div></div>{% endif %}<div class="c">{% with messages = get_flashed_messages() %}{% if messages %}{% for msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}{% endif %}{% endwith %}{{ content|safe }}</div></body></html>"""
 
 def is_admin():
     return session.get("tipo") == "admin"
@@ -392,32 +385,6 @@ def caixa():
         db.session.commit()
         return redirect("/caixa")
     return render_template_string(T, content=f'<div class="card"><h2>Caixa</h2><p>Kz {int(c.valor)}</p><form method="POST"><input type="number" name="valor" value="{c.valor}"><button>Alterar</button></form></div>')
-
-@app.route("/utilizadores")
-def utilizadores():
-    if not is_admin(): return redirect("/")
-    users = Usuario.query.all()
-    linhas = "".join(f"<tr><td>{u.nome}</td><td>{u.email}</td><td>{u.tipo}</td><td><a href='/permissoes/{u.id}' class='btn'>Permissões</a></td></tr>" for u in users)
-    return render_template_string(T, content=f'<div class="card"><h2>Utilizadores</h2><table><tr><th>Nome</th><th>Email</th><th>Tipo</th><th></th></tr>{linhas}</table></div>')
-
-@app.route("/permissoes/<int:id>", methods=["GET","POST"])
-def permissoes(id):
-    if not is_admin(): return redirect("/")
-    u = Usuario.query.get_or_404(id)
-    if request.method == "POST":
-        u.perm_hoje = "perm_hoje" in request.form
-        u.perm_relatorio = "perm_relatorio" in request.form
-        u.perm_produtos = "perm_produtos" in request.form
-        u.perm_stock = "perm_stock" in request.form
-        u.perm_compras = "perm_compras" in request.form
-        u.perm_restos = "perm_restos" in request.form
-        db.session.commit()
-        return redirect("/utilizadores")
-    checks = ""
-    for p, label in [("perm_hoje","Hoje"),("perm_relatorio","Relatório"),("perm_produtos","Produtos"),("perm_stock","Stock"),("perm_compras","Compras"),("perm_restos","Restos")]:
-        checked = " checked" if getattr(u, p) else ""
-        checks += f'<label style="display:block;margin:6px 0"><input type="checkbox" name="{p}"{checked}> {label}</label>'
-    return render_template_string(T, content=f'<div class="card"><h2>Permissões de {u.nome}</h2><form method="POST">{checks}<button>Guardar</button></form></div>')
 
 @app.route("/login", methods=["GET","POST"])
 def login():
