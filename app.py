@@ -129,7 +129,7 @@ def index():
             </form>
         </div>
         '''
-    return render_template_string(T, content=f'<div class="card"><h2>Vender</h2><form method="GET"><input name="busca" placeholder="Pesquisar..." value="{busca}"><button>Pesquisar</button></form><div class="grid">{boxes}</div></div>')
+    return render_template_string(T, content=f'<div class="card"><h2>Vender</h2><form method="GET"><input name="busca" placeholder="Pesquisar produto..." value="{busca}"><button>Pesquisar</button></form><div class="grid">{boxes}</div></div>')
 
 @app.route("/vender", methods=["POST"])
 def vender():
