@@ -15,6 +15,12 @@ class Usuario(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     senha = db.Column(db.String(200), nullable=False)
     tipo = db.Column(db.String(20), default="funcionario")
+    perm_hoje = db.Column(db.Boolean, default=False)
+    perm_relatorio = db.Column(db.Boolean, default=False)
+    perm_produtos = db.Column(db.Boolean, default=False)
+    perm_stock = db.Column(db.Boolean, default=False)
+    perm_compras = db.Column(db.Boolean, default=False)
+    perm_restos = db.Column(db.Boolean, default=False)
 
 class Produto(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -41,6 +47,7 @@ class FechamentoDia(db.Model):
     total_bruto = db.Column(db.Float)
     total_lucro = db.Column(db.Float, default=0)
     qtd_vendas = db.Column(db.Integer)
+    nota = db.Column(db.Text)
     data_fechamento = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Caixa(db.Model):
@@ -91,7 +98,10 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 th{background:#edf2f7;padding:7px;text-align:left}
 td{padding:7px;border-bottom:1px solid #eee}
 .flash{background:#e6fffa;padding:8px 12px;border-radius:6px;margin-bottom:10px;font-size:.85rem}
-</style></head><body>{% if session.get('user_id') %}<div class="top"><h1>Armazém</h1><div class="user">{{ session.get('nome','') }}</div><div class="nav"><a href="/">Vender</a><a href="/dashboard">Dashboard</a><a href="/hoje">Hoje</a><a href="/relatorio">Relatório</a><a href="/caixa">Caixa</a><a href="/produtos">Produtos</a><a href="/stock">Stock</a><a href="/compras">Compras</a><a href="/restos">Restos</a><a href="/logout">Sair</a></div></div>{% endif %}<div class="c">{% with messages = get_flashed_messages() %}{% if messages %}{% for msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}{% endif %}{% endwith %}{{ content|safe }}</div></body></html>"""
+.btn{display:inline-block;padding:6px 12px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:500;margin:2px;background:#2b6cb0;color:#fff}
+.btn-red{background:#c53030}
+.btn-green{background:#2f855a}
+</style></head><body>{% if session.get('user_id') %}<div class="top"><h1>Armazém</h1><div class="user">{{ session.get('nome','') }}</div><div class="nav"><a href="/">Vender</a><a href="/dashboard">Dashboard</a><a href="/resumo">Resumo do Dia</a><a href="/hoje">Hoje</a><a href="/relatorio">Relatório</a><a href="/ranking">Ranking</a><a href="/caixa">Caixa</a><a href="/produtos">Produtos</a><a href="/stock">Stock</a><a href="/compras">Compras</a><a href="/restos">Restos</a><a href="/utilizadores">Utilizadores</a><a href="/logout">Sair</a></div></div>{% endif %}<div class="c">{% with messages = get_flashed_messages() %}{% if messages %}{% for msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}{% endif %}{% endwith %}{{ content|safe }}</div></body></html>"""
 
 def is_admin():
     return session.get("tipo") == "admin"
@@ -157,7 +167,6 @@ def dashboard():
     ontem = date.today() - timedelta(days=1)
     vendas_ontem = Venda.query.filter(db.func.date(Venda.data)==ontem).all()
     bruto_ontem = sum(v.valor_total for v in vendas_ontem)
-    lucro_ontem = sum(v.lucro or 0 for v in vendas_ontem)
     
     compras = Compra.query.filter(Compra.data >= ultimo).all()
     total_compras = sum(c.valor for c in compras)
@@ -168,6 +177,7 @@ def dashboard():
     caixa = Caixa.query.filter_by(user_id=session["user_id"]).first()
     cv = caixa.valor if caixa else 0
     
+    valor_stock = sum((p.preco_compra or 0) * p.quantidade for p in Produto.query.all())
     baixos = Produto.query.filter(Produto.quantidade <= Produto.stock_minimo).count()
     
     botao = ""
@@ -178,11 +188,12 @@ def dashboard():
     <h2>Dashboard</h2>
     <div class="grid">
         <div class="stat">Vendas (desde último reset)<b>Kz {int(bruto)}</b><div style="font-size:.75rem;color:#666">Ontem: Kz {int(bruto_ontem)}</div></div>
-        <div class="stat">Lucro<b>Kz {int(lucro)}</b><div style="font-size:.75rem;color:#666">Ontem: Kz {int(lucro_ontem)}</div></div>
+        <div class="stat">Lucro<b>Kz {int(lucro)}</b></div>
         <div class="stat">Nº Vendas<b>{len(vendas)}</b></div>
         <div class="stat">Compras<b>Kz {int(total_compras)}</b></div>
         <div class="stat">Restos<b>Kz {int(total_restos)}</b></div>
         <div class="stat">Caixa<b>Kz {int(cv)}</b></div>
+        <div class="stat">Valor em Stock<b>Kz {int(valor_stock)}</b></div>
         <div class="stat">Stock Baixo<b>{baixos}</b></div>
     </div>
     {botao}
@@ -196,6 +207,40 @@ def reiniciar_dashboard():
     flash("Dashboard reiniciado.")
     return redirect("/dashboard")
 
+@app.route("/resumo")
+def resumo():
+    if "user_id" not in session: return redirect("/login")
+    hoje = date.today()
+    vendas = Venda.query.filter(db.func.date(Venda.data)==hoje).all()
+    bruto = sum(v.valor_total for v in vendas)
+    lucro = sum(v.lucro or 0 for v in vendas)
+    compras = sum(c.valor for c in Compra.query.filter(db.func.date(Compra.data)==hoje).all())
+    restos = sum(r.valor for r in Resto.query.filter(db.func.date(Resto.data)==hoje).all())
+    return render_template_string(T, content=f'''
+    <div class="card"><h2>Resumo do Dia</h2>
+    <p>Total Vendido: <b>Kz {int(bruto)}</b></p>
+    <p>Lucro: <b>Kz {int(lucro)}</b></p>
+    <p>Nº Vendas: <b>{len(vendas)}</b></p>
+    <p>Compras: <b>Kz {int(compras)}</b></p>
+    <p>Restos: <b>Kz {int(restos)}</b></p>
+    </div>
+    ''')
+
+@app.route("/ranking")
+def ranking():
+    if "user_id" not in session: return redirect("/login")
+    vendas = Venda.query.filter(Venda.data >= get_ultimo_reset()).all()
+    por_produto = {}
+    for v in vendas:
+        nome = v.produto.nome
+        if nome not in por_produto:
+            por_produto[nome] = {"qtd": 0, "valor": 0}
+        por_produto[nome]["qtd"] += v.quantidade
+        por_produto[nome]["valor"] += v.valor_total
+    ranking = sorted(por_produto.items(), key=lambda x: x[1]["valor"], reverse=True)
+    linhas = "".join(f"<tr><td>{i+1}</td><td>{n}</td><td>{d['qtd']}</td><td>Kz {int(d['valor'])}</td></tr>" for i,(n,d) in enumerate(ranking))
+    return render_template_string(T, content=f'<div class="card"><h2>Ranking</h2><table><tr><th>#</th><th>Produto</th><th>Qtd</th><th>Valor</th></tr>{linhas}</table></div>')
+
 @app.route("/hoje")
 def hoje():
     if "user_id" not in session: return redirect("/login")
@@ -203,7 +248,7 @@ def hoje():
     bruto = sum(v.valor_total for v in vendas)
     lucro = sum(v.lucro or 0 for v in vendas)
     linhas = "".join(f"<tr><td>{v.produto.nome}</td><td>{v.quantidade}</td><td>Kz {int(v.valor_total)}</td><td>Kz {int(v.lucro or 0)}</td></tr>" for v in vendas)
-    return render_template_string(T, content=f'<div class="card"><h2>Hoje</h2><p>Total: Kz {int(bruto)}</p><p>Lucro: Kz {int(lucro)}</p><form method="POST" action="/finalizar"><button class="o">Finalizar Dia</button></form><table><tr><th>Produto</th><th>Qtd</th><th>Valor</th><th>Lucro</th></tr>{linhas}</table></div>')
+    return render_template_string(T, content=f'<div class="card"><h2>Hoje</h2><p>Total: Kz {int(bruto)}</p><p>Lucro: Kz {int(lucro)}</p><form method="POST" action="/finalizar"><textarea name="nota" placeholder="Nota do dia (opcional)"></textarea><button class="o">Finalizar Dia</button></form><table><tr><th>Produto</th><th>Qtd</th><th>Valor</th><th>Lucro</th></tr>{linhas}</table></div>')
 
 @app.route("/finalizar", methods=["POST"])
 def finalizar():
@@ -211,7 +256,8 @@ def finalizar():
     vendas = Venda.query.filter(db.func.date(Venda.data)==date.today()).all()
     bruto = sum(v.valor_total for v in vendas)
     lucro = sum(v.lucro or 0 for v in vendas)
-    db.session.add(FechamentoDia(user_id=session["user_id"], data=date.today(), total_bruto=bruto, total_lucro=lucro, qtd_vendas=len(vendas)))
+    nota = request.form.get("nota", "")
+    db.session.add(FechamentoDia(user_id=session["user_id"], data=date.today(), total_bruto=bruto, total_lucro=lucro, qtd_vendas=len(vendas), nota=nota))
     db.session.commit()
     flash("Dia finalizado.")
     return redirect("/hoje")
@@ -220,34 +266,69 @@ def finalizar():
 def relatorio():
     if "user_id" not in session: return redirect("/login")
     fs = FechamentoDia.query.order_by(FechamentoDia.data.desc()).all()
-    linhas = "".join(f"<tr><td>{f.data.strftime('%d/%m/%Y')}</td><td>Kz {int(f.total_bruto or 0)}</td><td>Kz {int(f.total_lucro or 0)}</td><td>{f.qtd_vendas}</td></tr>" for f in fs)
-    return render_template_string(T, content=f'<div class="card"><h2>Relatório</h2><table><tr><th>Data</th><th>Total</th><th>Lucro</th><th>Vendas</th></tr>{linhas}</table></div>')
+    linhas = ""
+    for f in fs:
+        linhas += f"<tr><td>{f.data.strftime('%d/%m/%Y')}</td><td>Kz {int(f.total_bruto or 0)}</td><td>Kz {int(f.total_lucro or 0)}</td><td>{f.qtd_vendas}</td>"
+        if is_admin():
+            linhas += f"<td><a href='/editar-relatorio/{f.id}' class='btn'>Editar</a> <form method='POST' action='/eliminar-relatorio/{f.id}' style='display:inline'><button class='btn btn-red' onclick=\"return confirm('Eliminar?')\">Eliminar</button></form></td>"
+        linhas += "</tr>"
+    reiniciar = '<form method="POST" action="/reiniciar-relatorio"><button class="r" onclick="return confirm(\'Apagar todos os relatórios?\')">Reiniciar Relatório</button></form>' if is_admin() else ""
+    return render_template_string(T, content=f'<div class="card"><h2>Relatório</h2>{reiniciar}<table><tr><th>Data</th><th>Total</th><th>Lucro</th><th>Vendas</th><th></th></tr>{linhas}</table></div>')
 
-@app.route("/caixa", methods=["GET","POST"])
-def caixa():
-    if "user_id" not in session: return redirect("/login")
-    c = Caixa.query.filter_by(user_id=session["user_id"]).first()
-    if not c:
-        c = Caixa(user_id=session["user_id"], valor=0)
-        db.session.add(c)
-        db.session.commit()
+@app.route("/editar-relatorio/<int:id>", methods=["GET","POST"])
+def editar_relatorio(id):
+    if not is_admin(): return redirect("/")
+    f = FechamentoDia.query.get_or_404(id)
     if request.method == "POST":
-        c.valor = float(request.form["valor"])
+        f.total_bruto = float(request.form["bruto"])
+        f.total_lucro = float(request.form["lucro"])
+        f.qtd_vendas = int(request.form["qtd"])
+        f.nota = request.form.get("nota","")
         db.session.commit()
-        return redirect("/caixa")
-    return render_template_string(T, content=f'<div class="card"><h2>Caixa</h2><p>Kz {int(c.valor)}</p><form method="POST"><input type="number" name="valor" value="{c.valor}"><button>Alterar</button></form></div>')
+        return redirect("/relatorio")
+    return render_template_string(T, content=f'<div class="card"><h2>Editar Relatório</h2><form method="POST"><input type="number" name="bruto" value="{f.total_bruto or 0}"><input type="number" name="lucro" value="{f.total_lucro or 0}"><input type="number" name="qtd" value="{f.qtd_vendas or 0}"><textarea name="nota">{f.nota or ""}</textarea><button>Guardar</button></form></div>')
+
+@app.route("/eliminar-relatorio/<int:id>", methods=["POST"])
+def eliminar_relatorio(id):
+    if not is_admin(): return redirect("/")
+    db.session.delete(FechamentoDia.query.get_or_404(id))
+    db.session.commit()
+    return redirect("/relatorio")
+
+@app.route("/reiniciar-relatorio", methods=["POST"])
+def reiniciar_relatorio():
+    if not is_admin(): return redirect("/")
+    FechamentoDia.query.delete()
+    db.session.commit()
+    return redirect("/relatorio")
 
 @app.route("/produtos", methods=["GET","POST"])
 def produtos():
     if "user_id" not in session: return redirect("/login")
+    busca = request.args.get("busca","")
     if request.method == "POST" and is_admin():
         db.session.add(Produto(nome=request.form["nome"], preco=float(request.form["preco"]), preco_compra=float(request.form.get("preco_compra",0)), quantidade=int(request.form["quantidade"])))
         db.session.commit()
         return redirect("/produtos")
-    ps = Produto.query.order_by(Produto.nome).all()
-    linhas = "".join(f"<tr><td>{p.nome}</td><td>Kz {int(p.preco)}</td><td>Kz {int(p.preco_compra or 0)}</td><td>{p.quantidade}</td></tr>" for p in ps)
+    q = Produto.query
+    if busca: q = q.filter(Produto.nome.ilike("%"+busca+"%"))
+    ps = q.order_by(Produto.nome).all()
+    linhas = "".join(f"<tr><td>{p.nome}</td><td>Kz {int(p.preco)}</td><td>Kz {int(p.preco_compra or 0)}</td><td>{p.quantidade}</td><td><a href='/editar-produto/{p.id}' class='btn'>Editar</a></td></tr>" for p in ps)
     form = '<form method="POST"><input name="nome" placeholder="Nome" required><input type="number" name="preco" placeholder="Preço venda" required><input type="number" name="preco_compra" placeholder="Preço compra"><input type="number" name="quantidade" placeholder="Stock" required><button>Cadastrar</button></form>' if is_admin() else ""
-    return render_template_string(T, content=f'<div class="card"><h2>Produtos</h2>{form}<table><tr><th>Nome</th><th>Venda</th><th>Compra</th><th>Stock</th></tr>{linhas}</table></div>')
+    return render_template_string(T, content=f'<div class="card"><h2>Produtos</h2><form method="GET"><input name="busca" placeholder="Pesquisar..." value="{busca}"><button>Pesquisar</button></form>{form}<table><tr><th>Nome</th><th>Venda</th><th>Compra</th><th>Stock</th><th></th></tr>{linhas}</table></div>')
+
+@app.route("/editar-produto/<int:id>", methods=["GET","POST"])
+def editar_produto(id):
+    if not is_admin(): return redirect("/")
+    p = Produto.query.get_or_404(id)
+    if request.method == "POST":
+        p.nome = request.form["nome"]
+        p.preco = float(request.form["preco"])
+        p.preco_compra = float(request.form.get("preco_compra",0))
+        p.quantidade = int(request.form["quantidade"])
+        db.session.commit()
+        return redirect("/produtos")
+    return render_template_string(T, content=f'<div class="card"><h2>Editar Produto</h2><form method="POST"><input name="nome" value="{p.nome}"><input type="number" name="preco" value="{p.preco}"><input type="number" name="preco_compra" value="{p.preco_compra or 0}"><input type="number" name="quantidade" value="{p.quantidade}"><button>Guardar</button></form></div>')
 
 @app.route("/stock")
 def stock():
@@ -264,8 +345,18 @@ def compras():
         db.session.commit()
         return redirect("/compras")
     items = Compra.query.order_by(Compra.data.desc()).all()
-    linhas = "".join(f"<tr><td>{c.descricao}</td><td>Kz {int(c.valor)}</td><td>{c.data.strftime('%d/%m/%Y')}</td></tr>" for c in items)
-    return render_template_string(T, content=f'<div class="card"><h2>Compras</h2><form method="POST"><input name="descricao" placeholder="Descrição" required><input type="number" name="valor" placeholder="Valor" required><button>Registar</button></form><table><tr><th>Descrição</th><th>Valor</th><th>Data</th></tr>{linhas}</table></div>')
+    linhas = "".join(f"<tr><td>{c.descricao}</td><td>Kz {int(c.valor)}</td><td>{c.data.strftime('%d/%m/%Y')}</td><td><a href='/editar-compra/{c.id}' class='btn'>Editar</a></td></tr>" for c in items)
+    return render_template_string(T, content=f'<div class="card"><h2>Compras</h2><form method="POST"><input name="descricao" placeholder="Descrição" required><input type="number" name="valor" placeholder="Valor" required><button>Registar</button></form><table><tr><th>Descrição</th><th>Valor</th><th>Data</th><th></th></tr>{linhas}</table></div>')
+
+@app.route("/editar-compra/<int:id>", methods=["GET","POST"])
+def editar_compra(id):
+    c = Compra.query.get_or_404(id)
+    if request.method == "POST":
+        c.descricao = request.form["descricao"]
+        c.valor = float(request.form["valor"])
+        db.session.commit()
+        return redirect("/compras")
+    return render_template_string(T, content=f'<div class="card"><h2>Editar Compra</h2><form method="POST"><input name="descricao" value="{c.descricao}"><input type="number" name="valor" value="{c.valor}"><button>Guardar</button></form></div>')
 
 @app.route("/restos", methods=["GET","POST"])
 def restos():
@@ -275,8 +366,58 @@ def restos():
         db.session.commit()
         return redirect("/restos")
     items = Resto.query.order_by(Resto.data.desc()).all()
-    linhas = "".join(f"<tr><td>{r.descricao}</td><td>Kz {int(r.valor)}</td><td>{r.data.strftime('%d/%m/%Y')}</td></tr>" for r in items)
-    return render_template_string(T, content=f'<div class="card"><h2>Restos</h2><form method="POST"><input name="descricao" placeholder="Descrição" required><input type="number" name="valor" placeholder="Valor" required><button>Registar</button></form><table><tr><th>Descrição</th><th>Valor</th><th>Data</th></tr>{linhas}</table></div>')
+    linhas = "".join(f"<tr><td>{r.descricao}</td><td>Kz {int(r.valor)}</td><td>{r.data.strftime('%d/%m/%Y')}</td><td><a href='/editar-resto/{r.id}' class='btn'>Editar</a></td></tr>" for r in items)
+    return render_template_string(T, content=f'<div class="card"><h2>Restos</h2><form method="POST"><input name="descricao" placeholder="Descrição" required><input type="number" name="valor" placeholder="Valor" required><button>Registar</button></form><table><tr><th>Descrição</th><th>Valor</th><th>Data</th><th></th></tr>{linhas}</table></div>')
+
+@app.route("/editar-resto/<int:id>", methods=["GET","POST"])
+def editar_resto(id):
+    r = Resto.query.get_or_404(id)
+    if request.method == "POST":
+        r.descricao = request.form["descricao"]
+        r.valor = float(request.form["valor"])
+        db.session.commit()
+        return redirect("/restos")
+    return render_template_string(T, content=f'<div class="card"><h2>Editar Resto</h2><form method="POST"><input name="descricao" value="{r.descricao}"><input type="number" name="valor" value="{r.valor}"><button>Guardar</button></form></div>')
+
+@app.route("/caixa", methods=["GET","POST"])
+def caixa():
+    if "user_id" not in session: return redirect("/login")
+    c = Caixa.query.filter_by(user_id=session["user_id"]).first()
+    if not c:
+        c = Caixa(user_id=session["user_id"], valor=0)
+        db.session.add(c)
+        db.session.commit()
+    if request.method == "POST":
+        c.valor = float(request.form["valor"])
+        db.session.commit()
+        return redirect("/caixa")
+    return render_template_string(T, content=f'<div class="card"><h2>Caixa</h2><p>Kz {int(c.valor)}</p><form method="POST"><input type="number" name="valor" value="{c.valor}"><button>Alterar</button></form></div>')
+
+@app.route("/utilizadores")
+def utilizadores():
+    if not is_admin(): return redirect("/")
+    users = Usuario.query.all()
+    linhas = "".join(f"<tr><td>{u.nome}</td><td>{u.email}</td><td>{u.tipo}</td><td><a href='/permissoes/{u.id}' class='btn'>Permissões</a></td></tr>" for u in users)
+    return render_template_string(T, content=f'<div class="card"><h2>Utilizadores</h2><table><tr><th>Nome</th><th>Email</th><th>Tipo</th><th></th></tr>{linhas}</table></div>')
+
+@app.route("/permissoes/<int:id>", methods=["GET","POST"])
+def permissoes(id):
+    if not is_admin(): return redirect("/")
+    u = Usuario.query.get_or_404(id)
+    if request.method == "POST":
+        u.perm_hoje = "perm_hoje" in request.form
+        u.perm_relatorio = "perm_relatorio" in request.form
+        u.perm_produtos = "perm_produtos" in request.form
+        u.perm_stock = "perm_stock" in request.form
+        u.perm_compras = "perm_compras" in request.form
+        u.perm_restos = "perm_restos" in request.form
+        db.session.commit()
+        return redirect("/utilizadores")
+    checks = ""
+    for p, label in [("perm_hoje","Hoje"),("perm_relatorio","Relatório"),("perm_produtos","Produtos"),("perm_stock","Stock"),("perm_compras","Compras"),("perm_restos","Restos")]:
+        checked = " checked" if getattr(u, p) else ""
+        checks += f'<label style="display:block;margin:6px 0"><input type="checkbox" name="{p}"{checked}> {label}</label>'
+    return render_template_string(T, content=f'<div class="card"><h2>Permissões de {u.nome}</h2><form method="POST">{checks}<button>Guardar</button></form></div>')
 
 @app.route("/login", methods=["GET","POST"])
 def login():
