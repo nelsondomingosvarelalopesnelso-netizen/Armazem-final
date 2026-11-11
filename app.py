@@ -74,42 +74,49 @@ class ResetDashboard(db.Model):
     data_reset = db.Column(db.DateTime, default=datetime.utcnow)
 
 T = """<!DOCTYPE html><html lang="pt"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Armazém</title><style>
-*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
-body{background:#f8f9fa;color:#212529;transition:background .3s}
-body.dark{background:#121212;color:#e0e0e0}
-body.dark .card,body.dark .box,body.dark .stat{background:#1e1e1e;color:#e0e0e0}
-body.dark .top{background:#0a1929}
-body.dark th{background:#1a3a5c;color:#fff}
-body.dark input,body.dark select,body.dark textarea{background:#2a2a2a;color:#fff;border-color:#444}
-.top{background:#1a365d;color:#fff;padding:12px 16px;position:sticky;top:0;z-index:50}
-.top h1{font-size:1.1rem}
-.top .user{font-size:.75rem;opacity:.85;margin-top:2px}
-.nav{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
-.nav a{background:rgba(255,255,255,.15);color:#fff;padding:5px 11px;border-radius:16px;text-decoration:none;font-size:.75rem}
-.c{max-width:920px;margin:0 auto;padding:12px}
-.card{background:#fff;border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
-.card h2{font-size:1rem;margin-bottom:10px;color:#1a365d}
-input,button,select,textarea{width:100%;padding:10px;margin:4px 0;border-radius:7px;border:1px solid #ddd;font-size:14px}
-button{background:#2b6cb0;color:#fff;border:none;font-weight:500;cursor:pointer}
-.g{background:#2f855a}.o{background:#dd6b20}.r{background:#c53030}
-.s{width:auto;padding:6px 10px;font-size:12px;margin:2px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
-.box{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px;text-align:center}
-.box b{display:block;color:#1a365d;margin-bottom:3px}
-.box div{font-size:.75rem;color:#555;margin:2px 0}
-.stat{background:#fff;border-radius:12px;padding:16px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.08);border-top:4px solid #2b6cb0}
-.stat b{display:block;font-size:1.5rem;margin-top:6px;font-weight:700}
-.stat.venda b{color:#2b6cb0}
-.stat.lucro b{color:#2f855a}
-.stat.compras b{color:#dd6b20}
-.stat.stock b{color:#6b46c1}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{background:#edf2f7;padding:7px;text-align:left}
-td{padding:7px;border-bottom:1px solid #eee}
-.flash{background:#e6fffa;padding:8px 12px;border-radius:6px;margin-bottom:10px;font-size:.85rem}
-.btn{display:inline-block;padding:6px 12px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:500;margin:2px;background:#2b6cb0;color:#fff}
-.btn-red{background:#c53030}
-.btn-green{background:#2f855a}
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif}
+body{background:#f1f5f9;color:#1e293b;transition:all .3s}
+body.dark{background:#0f172a;color:#e2e8f0}
+body.dark .card,body.dark .box,body.dark .stat{background:#1e293b;color:#e2e8f0;border-color:#334155}
+body.dark .top{background:#0f172a}
+body.dark th{background:#1e3a5f}
+body.dark input,body.dark select,body.dark textarea{background:#1e293b;color:#fff;border-color:#475569}
+.top{background:linear-gradient(135deg,#1e3a8a,#1e40af);color:#fff;padding:14px 18px;position:sticky;top:0;z-index:50;box-shadow:0 2px 10px rgba(0,0,0,.1)}
+.top h1{font-size:1.15rem;font-weight:600}
+.top .user{font-size:.75rem;opacity:.9;margin-top:3px}
+.nav{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.nav a{background:rgba(255,255,255,.12);color:#fff;padding:6px 12px;border-radius:20px;text-decoration:none;font-size:.78rem;transition:background .2s}
+.nav a:hover{background:rgba(255,255,255,.22)}
+.c{max-width:960px;margin:0 auto;padding:16px}
+.card{background:#fff;border-radius:12px;padding:18px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.06);border:1px solid #e2e8f0}
+.card h2{font-size:1.05rem;margin-bottom:14px;color:#1e40af;font-weight:600}
+input,button,select,textarea{width:100%;padding:11px;margin:5px 0;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;transition:border .2s}
+input:focus,textarea:focus{outline:none;border-color:#3b82f6}
+button{background:#2563eb;color:#fff;border:none;font-weight:500;cursor:pointer;border-radius:8px}
+button:hover{background:#1d4ed8}
+.g{background:#16a34a}.g:hover{background:#15803d}
+.o{background:#ea580c}.o:hover{background:#c2410c}
+.r{background:#dc2626}.r:hover{background:#b91c1c}
+.s{width:auto;padding:7px 12px;font-size:12.5px;margin:2px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.box{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.box b{display:block;color:#1e40af;margin-bottom:4px;font-size:.95rem}
+.box div{font-size:.78rem;color:#475569;margin:3px 0}
+.stat{background:#fff;border-radius:12px;padding:18px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.06);border-top:4px solid #3b82f6}
+.stat b{display:block;font-size:1.6rem;margin-top:8px;font-weight:700}
+.stat.venda b{color:#2563eb}
+.stat.lucro b{color:#16a34a}
+.stat.compras b{color:#ea580c}
+.stat.stock b{color:#7c3aed}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{background:#f1f5f9;padding:10px;text-align:left;font-weight:600;color:#334155}
+td{padding:10px;border-bottom:1px solid #e2e8f0}
+.flash{background:#ecfdf5;color:#065f46;padding:10px 14px;border-radius:8px;margin-bottom:12px;font-size:.88rem;border-left:4px solid #10b981}
+.btn{display:inline-block;padding:7px 14px;border-radius:8px;text-decoration:none;font-size:12.5px;font-weight:500;margin:3px;background:#2563eb;color:#fff}
+.btn-red{background:#dc2626}
+.btn-green{background:#16a34a}
+.btn-orange{background:#ea580c}
+.btn:hover{opacity:.9}
 </style></head><body id="body">{% if session.get('user_id') %}<div class="top"><h1>Armazém</h1><div class="user">{{ session.get('nome','') }}</div><div class="nav"><a href="/">Vender</a><a href="/dashboard">Dashboard</a><a href="/resumo">Resumo do Dia</a><a href="/hoje">Hoje</a><a href="/relatorio">Relatório</a><a href="/ranking">Ranking</a><a href="/caixa">Caixa</a><a href="/produtos">Produtos</a><a href="/stock">Stock</a><a href="/compras">Compras</a><a href="/restos">Restos</a><a href="/utilizadores">Utilizadores</a><a href="#" onclick="toggleDark();return false;">Modo</a><a href="/logout">Sair</a></div></div>{% endif %}<div class="c">{% with messages = get_flashed_messages() %}{% if messages %}{% for msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}{% endif %}{% endwith %}{{ content|safe }}</div>
 <script>
 function toggleDark(){document.getElementById('body').classList.toggle('dark');localStorage.setItem('dark',document.getElementById('body').classList.contains('dark'))}
@@ -196,12 +203,12 @@ def dashboard():
     
     botao = ""
     if is_admin():
-        botao = '<form method="POST" action="/reiniciar-dashboard" style="margin-top:12px"><button class="r" onclick="return confirm(\'Reiniciar o Dashboard?\')">Reiniciar Dashboard</button></form>'
+        botao = '<form method="POST" action="/reiniciar-dashboard" style="margin-top:16px"><button class="r" onclick="return confirm(\'Reiniciar o Dashboard?\')">Reiniciar Dashboard</button></form>'
     
     return render_template_string(T, content=f'''
     <h2>Dashboard</h2>
     <div class="grid">
-        <div class="stat venda">Vendas (desde último reset)<b>Kz {int(bruto)}</b><div style="font-size:.75rem;color:#666">Ontem: Kz {int(bruto_ontem)}</div></div>
+        <div class="stat venda">Vendas (desde último reset)<b>Kz {int(bruto)}</b><div style="font-size:.75rem;color:#64748b">Ontem: Kz {int(bruto_ontem)}</div></div>
         <div class="stat lucro">Lucro<b>Kz {int(lucro)}</b></div>
         <div class="stat">Nº Vendas<b>{len(vendas)}</b></div>
         <div class="stat compras">Compras<b>Kz {int(total_compras)}</b></div>
@@ -269,8 +276,15 @@ def ranking():
         por_produto[nome]["qtd"] += v.quantidade
         por_produto[nome]["valor"] += v.valor_total
     ranking = sorted(por_produto.items(), key=lambda x: x[1]["valor"], reverse=True)
-    linhas = "".join(f"<tr><td>{i+1}</td><td>{n}</td><td>{d['qtd']}</td><td>Kz {int(d['valor'])}</td></tr>" for i,(n,d) in enumerate(ranking))
-    filtros = f'<p><a href="/ranking?periodo=hoje">Hoje</a> | <a href="/ranking?periodo=ontem">Ontem</a> | <a href="/ranking?periodo=semana">Semana</a> | <a href="/ranking?periodo=mes">Mês</a></p>'
+    linhas = "".join(f"<tr><td style='font-weight:600;color:#1e40af'>{i+1}</td><td>{n}</td><td>{d['qtd']}</td><td style='font-weight:600'>Kz {int(d['valor'])}</td></tr>" for i,(n,d) in enumerate(ranking))
+    filtros = '''
+    <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap">
+        <a href="/ranking?periodo=hoje" class="btn">Hoje</a>
+        <a href="/ranking?periodo=ontem" class="btn">Ontem</a>
+        <a href="/ranking?periodo=semana" class="btn">Semana</a>
+        <a href="/ranking?periodo=mes" class="btn">Mês</a>
+    </div>
+    '''
     return render_template_string(T, content=f'<div class="card"><h2>{titulo}</h2>{filtros}<table><tr><th>#</th><th>Produto</th><th>Qtd</th><th>Valor</th></tr>{linhas}</table></div>')
 
 @app.route("/hoje")
@@ -304,7 +318,7 @@ def relatorio():
         if is_admin():
             linhas += f"<td><a href='/editar-relatorio/{f.id}' class='btn'>Editar</a> <form method='POST' action='/eliminar-relatorio/{f.id}' style='display:inline'><button class='btn btn-red' onclick=\"return confirm('Eliminar?')\">Eliminar</button></form></td>"
         linhas += "</tr>"
-    reiniciar = '<form method="POST" action="/reiniciar-relatorio"><button class="r" onclick="return confirm(\'Apagar todos os relatórios?\')">Reiniciar Relatório</button></form>' if is_admin() else ""
+    reiniciar = '<form method="POST" action="/reiniciar-relatorio" style="margin-bottom:12px"><button class="r" onclick="return confirm(\'Apagar todos os relatórios?\')">Reiniciar Relatório</button></form>' if is_admin() else ""
     return render_template_string(T, content=f'<div class="card"><h2>Relatório</h2>{reiniciar}<table><tr><th>Data</th><th>Total</th><th>Lucro</th><th>Vendas</th><th></th></tr>{linhas}</table></div>')
 
 @app.route("/editar-relatorio/<int:id>", methods=["GET","POST"])
@@ -423,14 +437,21 @@ def caixa():
         c.valor = float(request.form["valor"])
         db.session.commit()
         return redirect("/caixa")
-    return render_template_string(T, content=f'<div class="card"><h2>Caixa</h2><p>Kz {int(c.valor)}</p><form method="POST"><input type="number" name="valor" value="{c.valor}"><button>Alterar</button></form></div>')
+    return render_template_string(T, content=f'<div class="card"><h2>Caixa</h2><p style="font-size:1.4rem;font-weight:600">Kz {int(c.valor)}</p><form method="POST"><input type="number" name="valor" value="{c.valor}"><button>Alterar</button></form></div>')
 
 @app.route("/utilizadores")
 def utilizadores():
     if not is_admin(): return redirect("/")
     users = Usuario.query.all()
-    linhas = "".join(f"<tr><td>{u.nome}</td><td>{u.email}</td><td>{u.tipo}</td><td><a href='/permissoes/{u.id}' class='btn'>Permissões</a></td></tr>" for u in users)
-    return render_template_string(T, content=f'<div class="card"><h2>Utilizadores</h2><p><a href="/criar-utilizador" class="btn btn-green">Criar Utilizador</a></p><table><tr><th>Nome</th><th>Email</th><th>Tipo</th><th></th></tr>{linhas}</table></div>')
+    linhas = ""
+    for u in users:
+        linhas += f"<tr><td>{u.nome}</td><td>{u.email}</td><td>{u.tipo}</td><td>"
+        linhas += f"<a href='/permissoes/{u.id}' class='btn'>Permissões</a> "
+        linhas += f"<a href='/redefinir/{u.id}' class='btn btn-orange'>Redefinir Senha</a> "
+        if u.tipo != "admin":
+            linhas += f"<form method='POST' action='/eliminar-utilizador/{u.id}' style='display:inline'><button class='btn btn-red' onclick=\"return confirm('Eliminar este utilizador?')\">Eliminar</button></form>"
+        linhas += "</td></tr>"
+    return render_template_string(T, content=f'<div class="card"><h2>Utilizadores</h2><p><a href="/criar-utilizador" class="btn btn-green">Criar Utilizador</a></p><table><tr><th>Nome</th><th>Email</th><th>Tipo</th><th>Ações</th></tr>{linhas}</table></div>')
 
 @app.route("/criar-utilizador", methods=["GET","POST"])
 def criar_utilizador():
@@ -442,7 +463,30 @@ def criar_utilizador():
             flash("Utilizador criado")
             return redirect("/utilizadores")
         flash("Email já existe")
-    return render_template_string(T, content='<div class="card"><h2>Criar Utilizador</h2><form method="POST"><input name="nome" placeholder="Nome" required><input type="email" name="email" placeholder="Email" required><input type="password" name="senha" placeholder="Senha" required><button>Criar</button></form></div>')
+    return render_template_string(T, content='<div class="card"><h2>Criar Utilizador</h2><form method="POST"><input name="nome" placeholder="Nome" required><input type="email" name="email" placeholder="Email" required><input type="password" name="senha" placeholder="Senha" required><button>Criar</button></form><p style="margin-top:10px"><a href="/utilizadores" class="btn">Voltar</a></p></div>')
+
+@app.route("/redefinir/<int:id>", methods=["GET","POST"])
+def redefinir(id):
+    if not is_admin(): return redirect("/")
+    u = Usuario.query.get_or_404(id)
+    if request.method == "POST":
+        u.senha = generate_password_hash(request.form["senha"])
+        db.session.commit()
+        flash(f"Senha redefinida para {u.nome}")
+        return redirect("/utilizadores")
+    return render_template_string(T, content=f'<div class="card"><h2>Redefinir senha de {u.nome}</h2><form method="POST"><input type="password" name="senha" placeholder="Nova senha" required><button>Guardar</button></form><p style="margin-top:10px"><a href="/utilizadores" class="btn">Voltar</a></p></div>')
+
+@app.route("/eliminar-utilizador/<int:id>", methods=["POST"])
+def eliminar_utilizador(id):
+    if not is_admin(): return redirect("/")
+    u = Usuario.query.get_or_404(id)
+    if u.tipo == "admin":
+        flash("Não podes eliminar o administrador")
+        return redirect("/utilizadores")
+    db.session.delete(u)
+    db.session.commit()
+    flash("Utilizador eliminado")
+    return redirect("/utilizadores")
 
 @app.route("/permissoes/<int:id>", methods=["GET","POST"])
 def permissoes(id):
@@ -456,12 +500,13 @@ def permissoes(id):
         u.perm_compras = "perm_compras" in request.form
         u.perm_restos = "perm_restos" in request.form
         db.session.commit()
+        flash("Permissões atualizadas")
         return redirect("/utilizadores")
     checks = ""
     for p, label in [("perm_hoje","Hoje"),("perm_relatorio","Relatório"),("perm_produtos","Produtos"),("perm_stock","Stock"),("perm_compras","Compras"),("perm_restos","Restos")]:
         checked = " checked" if getattr(u, p) else ""
-        checks += f'<label style="display:block;margin:6px 0"><input type="checkbox" name="{p}"{checked}> {label}</label>'
-    return render_template_string(T, content=f'<div class="card"><h2>Permissões de {u.nome}</h2><form method="POST">{checks}<button>Guardar</button></form></div>')
+        checks += f'<label style="display:block;margin:8px 0"><input type="checkbox" name="{p}"{checked}> {label}</label>'
+    return render_template_string(T, content=f'<div class="card"><h2>Permissões de {u.nome}</h2><form method="POST">{checks}<button>Guardar</button></form><p style="margin-top:10px"><a href="/utilizadores" class="btn">Voltar</a></p></div>')
 
 @app.route("/login", methods=["GET","POST"])
 def login():
@@ -473,7 +518,7 @@ def login():
             session["tipo"] = u.tipo or "funcionario"
             return redirect("/dashboard")
         flash("Email ou senha incorretos")
-    return render_template_string(T, content='<div class="card" style="max-width:360px;margin:30px auto"><h2>Entrar</h2><form method="POST"><input type="email" name="email" placeholder="Email" required><input type="password" name="senha" placeholder="Senha" required><button>Entrar</button></form></div>')
+    return render_template_string(T, content='<div class="card" style="max-width:380px;margin:40px auto"><h2>Entrar</h2><form method="POST"><input type="email" name="email" placeholder="Email" required><input type="password" name="senha" placeholder="Senha" required><button>Entrar</button></form></div>')
 
 @app.route("/logout")
 def logout():
