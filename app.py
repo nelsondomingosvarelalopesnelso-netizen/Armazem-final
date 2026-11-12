@@ -146,6 +146,17 @@ def index():
     boxes = ""
     for p in q.order_by(Produto.nome).all():
         lucro = calcular_lucro_unidade(p.preco, p.preco_compra or 0)
+        admin_btns = ""
+        if is_admin():
+            admin_btns = f'''
+            <form method="POST" action="/devolver" style="display:inline">
+                <input type="hidden" name="produto_id" value="{p.id}">
+                <button class="o s">Devolver</button>
+            </form>
+            <form method="POST" action="/eliminar-produto/{p.id}" style="display:inline" onsubmit="return confirm('Eliminar produto?')">
+                <button class="r s">Eliminar</button>
+            </form>
+            '''
         boxes += f'''
         <div class="box">
             <b>{p.nome}</b>
@@ -158,6 +169,7 @@ def index():
                 <input type="number" name="quantidade" value="1" min="1" max="{p.quantidade}" style="width:60px;display:inline-block">
                 <button class="g s">Vender</button>
             </form>
+            {admin_btns}
         </div>
         '''
     return render_template_string(T, content=f'<div class="card"><h2>Vender</h2><form method="GET"><input name="busca" placeholder="Pesquisar produto..." value="{busca}"><button>Pesquisar</button></form><div class="grid">{boxes}</div></div>')
@@ -175,6 +187,25 @@ def vender():
         flash(f"Vendido {qtd}x {p.nome}")
     else:
         flash("Stock insuficiente")
+    return redirect("/")
+
+@app.route("/devolver", methods=["POST"])
+def devolver():
+    if not is_admin(): return redirect("/")
+    p = Produto.query.get(int(request.form["produto_id"]))
+    if p:
+        p.quantidade += 1
+        db.session.commit()
+        flash(f"Devolvido 1x {p.nome}")
+    return redirect("/")
+
+@app.route("/eliminar-produto/<int:id>", methods=["POST"])
+def eliminar_produto(id):
+    if not is_admin(): return redirect("/")
+    p = Produto.query.get_or_404(id)
+    db.session.delete(p)
+    db.session.commit()
+    flash("Produto eliminado")
     return redirect("/")
 
 @app.route("/dashboard")
@@ -380,8 +411,33 @@ def editar_produto(id):
 def stock():
     if "user_id" not in session: return redirect("/login")
     ps = Produto.query.order_by(Produto.nome).all()
-    linhas = "".join(f"<tr><td>{p.nome}</td><td>{p.quantidade}</td></tr>" for p in ps)
-    return render_template_string(T, content=f'<div class="card"><h2>Stock</h2><table><tr><th>Produto</th><th>Quantidade</th></tr>{linhas}</table></div>')
+    linhas = ""
+    for p in ps:
+        btns = ""
+        if is_admin():
+            btns = f'''
+            <form method="POST" action="/aumentar-stock/{p.id}" style="display:inline"><button class="g s">+</button></form>
+            <form method="POST" action="/diminuir-stock/{p.id}" style="display:inline"><button class="r s">-</button></form>
+            '''
+        linhas += f"<tr><td>{p.nome}</td><td>{p.quantidade}</td><td>{btns}</td></tr>"
+    return render_template_string(T, content=f'<div class="card"><h2>Stock</h2><table><tr><th>Produto</th><th>Quantidade</th><th></th></tr>{linhas}</table></div>')
+
+@app.route("/aumentar-stock/<int:id>", methods=["POST"])
+def aumentar_stock(id):
+    if not is_admin(): return redirect("/")
+    p = Produto.query.get_or_404(id)
+    p.quantidade += 1
+    db.session.commit()
+    return redirect("/stock")
+
+@app.route("/diminuir-stock/<int:id>", methods=["POST"])
+def diminuir_stock(id):
+    if not is_admin(): return redirect("/")
+    p = Produto.query.get_or_404(id)
+    if p.quantidade > 0:
+        p.quantidade -= 1
+        db.session.commit()
+    return redirect("/stock")
 
 @app.route("/compras", methods=["GET","POST"])
 def compras():
